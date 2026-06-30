@@ -5,7 +5,6 @@ import (
 	"log"
 
 	"github.com/KernelFlowLabs/wallet-sdk/mobile/acc"
-	"github.com/KernelFlowLabs/wallet-sdk/mobile/example/shared"
 )
 
 const path = "m/44'/60'/0'/0/0"
@@ -42,8 +41,10 @@ const typedData = `{
   }
 }`
 
+const mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+
 func main() {
-	a, err := acc.NewEvmFromMnemonic(shared.Mnemonic(), path)
+	a, err := acc.NewEvmFromMnemonic(mnemonic, path)
 	if err != nil {
 		log.Fatalf("derive account: %v", err)
 	}

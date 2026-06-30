@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/KernelFlowLabs/wallet-sdk/mobile/acc"
-	"github.com/KernelFlowLabs/wallet-sdk/mobile/example/shared"
 	"github.com/KernelFlowLabs/wallet-sdk/mobile/tx"
 	mvxrpc "github.com/KernelFlowLabs/wallet-sdk/rpc/multiversx"
 	"github.com/KernelFlowLabs/wallet-sdk/signing"
@@ -17,12 +16,17 @@ import (
 
 const path = "m/44'/508'/0'/0'/0'"
 
+const (
+	mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+	rpcURL   = "https://gateway.multiversx.com"
+	network  = "1"
+)
+
 func main() {
 	ctx := context.Background()
-	rpcURL, network := shared.RPC("multiversx")
 	fmt.Println("0. network:", network)
 
-	a, err := acc.NewEgldFromMnemonic(shared.Mnemonic(), path)
+	a, err := acc.NewEgldFromMnemonic(mnemonic, path)
 	if err != nil {
 		log.Fatalf("derive account: %v", err)
 	}

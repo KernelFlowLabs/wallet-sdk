@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/KernelFlowLabs/wallet-sdk/mobile/acc"
-	"github.com/KernelFlowLabs/wallet-sdk/mobile/example/shared"
 	"github.com/KernelFlowLabs/wallet-sdk/mobile/tx"
 	aptosrpc "github.com/KernelFlowLabs/wallet-sdk/rpc/aptos"
 	"github.com/KernelFlowLabs/wallet-sdk/signing"
@@ -17,12 +16,17 @@ import (
 
 const path = "m/44'/637'/0'/0'/0'"
 
+const (
+	mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+	rpcURL   = "https://fullnode.mainnet.aptoslabs.com"
+	network  = "1"
+)
+
 func main() {
 	ctx := context.Background()
-	rpcURL, network := shared.RPC("aptos")
 	_ = network
 
-	a, err := acc.NewAptFromMnemonic(shared.Mnemonic(), path)
+	a, err := acc.NewAptFromMnemonic(mnemonic, path)
 	if err != nil {
 		log.Fatalf("derive account: %v", err)
 	}

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/KernelFlowLabs/wallet-sdk/mobile/acc"
-	"github.com/KernelFlowLabs/wallet-sdk/mobile/example/shared"
 	"github.com/KernelFlowLabs/wallet-sdk/mobile/tx"
 	utxorpc "github.com/KernelFlowLabs/wallet-sdk/rpc/utxo"
 	"github.com/KernelFlowLabs/wallet-sdk/signing"
@@ -16,11 +15,16 @@ import (
 
 const path = "m/44'/0'/0'/0/0"
 
+const (
+	mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+	rpcURL   = "https://your-bitcoin-node.example&user@pass;https://your-scan-api.example"
+	network  = "0"
+)
+
 func main() {
 	ctx := context.Background()
-	rpcURL, network := shared.RPC("utxo")
 
-	a, err := acc.NewUtxoFromMnemonic(shared.Mnemonic(), path, network)
+	a, err := acc.NewUtxoFromMnemonic(mnemonic, path, network)
 	if err != nil {
 		log.Fatalf("derive account: %v", err)
 	}

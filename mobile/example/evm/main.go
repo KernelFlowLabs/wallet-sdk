@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/KernelFlowLabs/wallet-sdk/mobile/acc"
-	"github.com/KernelFlowLabs/wallet-sdk/mobile/example/shared"
 	"github.com/KernelFlowLabs/wallet-sdk/mobile/tx"
 	evmrpc "github.com/KernelFlowLabs/wallet-sdk/rpc/evm"
 	"github.com/KernelFlowLabs/wallet-sdk/signing"
@@ -15,11 +14,16 @@ import (
 
 const path = "m/44'/60'/0'/0/0"
 
+const (
+	mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+	rpcURL   = "https://bsc.rpc.blxrbdn.com"
+	network  = "56"
+)
+
 func main() {
 	ctx := context.Background()
-	rpcURL, network := shared.RPC("evm")
 
-	a, err := acc.NewEvmFromMnemonic(shared.Mnemonic(), path)
+	a, err := acc.NewEvmFromMnemonic(mnemonic, path)
 	if err != nil {
 		log.Fatalf("derive account: %v", err)
 	}

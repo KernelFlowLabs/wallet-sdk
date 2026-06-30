@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/KernelFlowLabs/wallet-sdk/mobile/acc"
-	"github.com/KernelFlowLabs/wallet-sdk/mobile/example/shared"
 	"github.com/KernelFlowLabs/wallet-sdk/mobile/tx"
 	substraterpc "github.com/KernelFlowLabs/wallet-sdk/rpc/substrate"
 	"github.com/KernelFlowLabs/wallet-sdk/signing"
@@ -16,11 +15,16 @@ import (
 
 const path = "m/44'/354'/0'/0/0"
 
+const (
+	mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+	rpcURL   = "https://rpc.polkadot.io"
+	network  = "0"
+)
+
 func main() {
 	ctx := context.Background()
-	rpcURL, network := shared.RPC("substrate")
 
-	a, err := acc.NewSubstrateFromMnemonic(shared.Mnemonic(), path, network)
+	a, err := acc.NewSubstrateFromMnemonic(mnemonic, path, network)
 	if err != nil {
 		log.Fatalf("derive account: %v", err)
 	}

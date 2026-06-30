@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/KernelFlowLabs/wallet-sdk/mobile/acc"
-	"github.com/KernelFlowLabs/wallet-sdk/mobile/example/shared"
 	"github.com/KernelFlowLabs/wallet-sdk/mobile/tx"
 	tronrpc "github.com/KernelFlowLabs/wallet-sdk/rpc/tron"
 	"github.com/KernelFlowLabs/wallet-sdk/signing"
@@ -16,11 +15,15 @@ import (
 
 const path = "m/44'/195'/0'/0/0"
 
+const (
+	mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+	rpcURL   = "https://api.trongrid.io"
+)
+
 func main() {
 	ctx := context.Background()
-	rpcURL, _ := shared.RPC("tron")
 
-	a, err := acc.NewTrxFromMnemonic(shared.Mnemonic(), path)
+	a, err := acc.NewTrxFromMnemonic(mnemonic, path)
 	if err != nil {
 		log.Fatalf("derive account: %v", err)
 	}

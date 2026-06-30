@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/KernelFlowLabs/wallet-sdk/mobile/acc"
-	"github.com/KernelFlowLabs/wallet-sdk/mobile/example/shared"
 	"github.com/KernelFlowLabs/wallet-sdk/mobile/tx"
 	solrpc "github.com/KernelFlowLabs/wallet-sdk/rpc/solana"
 	"github.com/KernelFlowLabs/wallet-sdk/signing"
@@ -16,11 +15,15 @@ import (
 
 const path = "m/44'/501'/0'/0'"
 
+const (
+	mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+	rpcURL   = "https://api.mainnet-beta.solana.com"
+)
+
 func main() {
 	ctx := context.Background()
-	rpcURL, _ := shared.RPC("solana")
 
-	a, err := acc.NewSolFromMnemonic(shared.Mnemonic(), path)
+	a, err := acc.NewSolFromMnemonic(mnemonic, path)
 	if err != nil {
 		log.Fatalf("derive account: %v", err)
 	}

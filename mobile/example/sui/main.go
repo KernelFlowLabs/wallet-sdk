@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/KernelFlowLabs/wallet-sdk/mobile/acc"
-	"github.com/KernelFlowLabs/wallet-sdk/mobile/example/shared"
 	"github.com/KernelFlowLabs/wallet-sdk/mobile/tx"
 	suirpc "github.com/KernelFlowLabs/wallet-sdk/rpc/sui"
 	"github.com/KernelFlowLabs/wallet-sdk/signing"
@@ -15,11 +14,15 @@ import (
 
 const path = "m/44'/784'/0'/0'/0'"
 
+const (
+	mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+	rpcURL   = "https://fullnode.mainnet.sui.io:443"
+)
+
 func main() {
 	ctx := context.Background()
-	rpcURL, _ := shared.RPC("sui")
 
-	a, err := acc.NewSuiFromMnemonic(shared.Mnemonic(), path)
+	a, err := acc.NewSuiFromMnemonic(mnemonic, path)
 	if err != nil {
 		log.Fatalf("derive account: %v", err)
 	}

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/KernelFlowLabs/wallet-sdk/mobile/acc"
-	"github.com/KernelFlowLabs/wallet-sdk/mobile/example/shared"
 	"github.com/KernelFlowLabs/wallet-sdk/mobile/tx"
 	kasrpc "github.com/KernelFlowLabs/wallet-sdk/rpc/kaspa"
 	"github.com/KernelFlowLabs/wallet-sdk/signing"
@@ -15,11 +14,15 @@ import (
 
 const path = "m/44'/111111'/0'/0/0"
 
+const (
+	mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+	rpcURL   = "grpc://n-mainnet.kaspa.ws:16110"
+)
+
 func main() {
 	ctx := context.Background()
-	rpcURL, _ := shared.RPC("kaspa")
 
-	a, err := acc.NewKasFromMnemonic(shared.Mnemonic(), path)
+	a, err := acc.NewKasFromMnemonic(mnemonic, path)
 	if err != nil {
 		log.Fatalf("derive account: %v", err)
 	}
