@@ -1,0 +1,102 @@
+//go:build kas || !custom
+
+package tx
+
+import (
+	"github.com/KernelFlowLabs/wallet-sdk/signing"
+	"github.com/KernelFlowLabs/wallet-sdk/signing/kaspa"
+	"strings"
+)
+
+type KasTxBuilder struct {
+	in  *kaspa.TxBuilder
+	err error
+}
+
+func NewKasTxBuilder() *KasTxBuilder {
+	return &KasTxBuilder{
+		in: kaspa.NewTxBuilder(&kaspa.Ingredient{}),
+	}
+}
+
+func (b *KasTxBuilder) SetTxType(txType string) *KasTxBuilder {
+	b.in.Ingredient.TxType = txType
+	return b
+}
+
+func (b *KasTxBuilder) SetContractAddress(addr string) *KasTxBuilder {
+	b.in.Ingredient.ContractAddress = addr
+	return b
+}
+
+func (b *KasTxBuilder) SetSender(addr string) *KasTxBuilder {
+	b.in.Ingredient.Sender = addr
+	return b
+}
+
+func (b *KasTxBuilder) SetRecipient(addr string) *KasTxBuilder {
+	b.in.Ingredient.Recipient = addr
+	return b
+}
+
+func (b *KasTxBuilder) SetAmount(amount string) *KasTxBuilder {
+	b.in.Ingredient.Amount = amount
+	return b
+}
+
+func (b *KasTxBuilder) SetFee(fee string) *KasTxBuilder {
+	b.in.Ingredient.Fee = fee
+	return b
+}
+
+func (b *KasTxBuilder) SetUtxos(utxos *MobileUtxoList) *KasTxBuilder {
+	b.in.Ingredient.Utxos = (*signing.UtxoList)(utxos)
+	return b
+}
+
+func (b *KasTxBuilder) SetKrc20RedeemScript(krc20RedeemScript string) *KasTxBuilder {
+	b.in.Ingredient.Krc20RedeemScript = krc20RedeemScript
+	return b
+}
+
+func (b *KasTxBuilder) Build() error {
+	if b.err != nil {
+		return b.err
+	}
+	return b.in.Build()
+}
+
+func (b *KasTxBuilder) SigHash() string {
+	sh := b.in.GetSigHash()
+	if len(sh) == 0 {
+		return ""
+	}
+	return sh[0]
+}
+
+func (b *KasTxBuilder) UnsignedHex() string {
+	return b.in.GetUnsignedHex()
+}
+
+func (b *KasTxBuilder) Sign(privateKey []byte) (string, error) {
+	sig, err := b.in.Sign(privateKey)
+	if err != nil {
+		return "", err
+	}
+	WipeByte(privateKey)
+	return sig, nil
+}
+
+func (b *KasTxBuilder) ConcatSignature(signatureHex string) (string, error) {
+	return b.in.ConcatSignature(strings.TrimPrefix(signatureHex, "0x"), false)
+}
+
+func (b *KasTxBuilder) TxHash() string {
+	return b.in.GetTxHash()
+}
+
+func GenerateKrc20Params(in *MobileKrc20Params, pubKey []byte) (string, error) {
+	return kaspa.GetKrc20Params((*kaspa.Krc20Params)(in), pubKey)
+}
+
+type MobileKrc20Params kaspa.Krc20Params

@@ -1,0 +1,112 @@
+//go:build sol || !custom
+
+package tx
+
+import (
+	"github.com/KernelFlowLabs/wallet-sdk/signing"
+	"github.com/KernelFlowLabs/wallet-sdk/signing/solana"
+	"strings"
+)
+
+type SolTxBuilder struct {
+	in  *solana.TxBuilder
+	err error
+}
+
+func NewSolTxBuilder() *SolTxBuilder {
+	return &SolTxBuilder{
+		in: solana.NewTxBuilder(&solana.Ingredient{}),
+	}
+}
+
+func NewSolTxBuilderFromUnsignedHex(unsignedHex string) (*SolTxBuilder, error) {
+	txBuilder, err := solana.NewTxBuilderFromUnsignedHex(unsignedHex)
+	if err != nil {
+		return nil, err
+	}
+	return &SolTxBuilder{
+		in: txBuilder,
+	}, nil
+}
+
+func (b *SolTxBuilder) SetTxType(txType string) *SolTxBuilder {
+	b.in.Ingredient.TxType = txType
+	return b
+}
+
+func (b *SolTxBuilder) SetContractAddress(addr string) *SolTxBuilder {
+	b.in.Ingredient.ContractAddress = addr
+	return b
+}
+
+func (b *SolTxBuilder) SetSender(addr string) *SolTxBuilder {
+	b.in.Ingredient.Sender = addr
+	return b
+}
+
+func (b *SolTxBuilder) SetRecipient(addr string) *SolTxBuilder {
+	b.in.Ingredient.Recipient = addr
+	return b
+}
+
+func (b *SolTxBuilder) SetAmount(amount string) *SolTxBuilder {
+	b.in.Ingredient.Amount = amount
+	return b
+}
+
+func (b *SolTxBuilder) SetFee(fee string) *SolTxBuilder {
+	isToken := false
+	if b.in.Ingredient.ContractAddress == signing.MagicContactAddressForNative {
+		isToken = true
+	}
+	unitPrice, unitLimit := solana.RecommendComputeBudget(fee, isToken)
+	b.in.Ingredient.UnitPrice = unitPrice
+	b.in.Ingredient.UnitLimit = unitLimit
+	return b
+}
+
+func (b *SolTxBuilder) SetRefBlockHash(hash string) *SolTxBuilder {
+	b.in.Ingredient.RefBlockHash = hash
+	return b
+}
+
+func (b *SolTxBuilder) HasATA(has string) *SolTxBuilder {
+	b.in.Ingredient.HasATA = has
+	return b
+}
+
+func (b *SolTxBuilder) Build() error {
+	if b.err != nil {
+		return b.err
+	}
+	return b.in.Build()
+}
+
+func (b *SolTxBuilder) SigHash() string {
+	sh := b.in.GetSigHash()
+	if len(sh) == 0 {
+		return ""
+	}
+	return sh[0]
+}
+
+func (b *SolTxBuilder) UnsignedHex() string {
+	return b.in.GetUnsignedHex()
+}
+
+func (b *SolTxBuilder) Sign(privateKey []byte) (string, error) {
+	sig, err := b.in.Sign(privateKey)
+	if err != nil {
+		return "", err
+	}
+	WipeByte(privateKey)
+	return sig, nil
+}
+
+func (b *SolTxBuilder) ConcatSignature(signatureHex string) (string, error) {
+	return b.in.ConcatSignature(strings.TrimPrefix(signatureHex, "0x"), false)
+}
+
+func (b *SolTxBuilder) TxHash() string {
+	return b.in.GetTxHash()
+}

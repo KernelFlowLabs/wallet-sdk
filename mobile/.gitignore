@@ -1,0 +1,16 @@
+example/.mn
+example/.rpc
+*.mn
+*.rpc
+.idea/
+/aptos
+/evm
+/kaspa
+/multiversx
+/solana
+/substrate
+/sui
+/tron
+/utxo
+dist/
+test/

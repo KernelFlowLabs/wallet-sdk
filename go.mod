@@ -29,8 +29,6 @@ require (
 	filippo.io/edwards25519 v1.1.1 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20260607022201-88e0521b82d3 // indirect
-	github.com/btcsuite/go-socks v0.0.0-20170105172521-4720035b7bfd // indirect
-	github.com/btcsuite/websocket v0.0.0-20150119174127-31079b680792 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cosmos/go-bip39 v1.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
