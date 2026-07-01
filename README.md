@@ -22,8 +22,9 @@ products, open-sourced so it can be audited and reused.
 - **MPC / cold-signer friendly** — the `Build → Sign → ConcatSignature` split
   separates sig-hash generation from signature assembly, so the signing step can
   run in an isolated process (HSM, MPC node, air-gapped signer).
-- **Mobile bindings** — a flat, `gomobile`-friendly façade lives in the separate
-  [`wallet-mobile`](https://github.com/KernelFlowLabs/wallet-mobile) repo (iOS / Android).
+- **Mobile bindings** — a flat, `gomobile`-friendly façade lives in
+  [`mobile/`](./mobile): `mobile/acc` and `mobile/tx` expose string / `[]byte`
+  APIs, and `mobile/buildmobile.sh` builds the Android AAR / iOS XCFramework.
 
 ## Supported chains
 
@@ -38,6 +39,13 @@ products, open-sourced so it can be audited and reused.
 | Kaspa         | ✅ | ✅ |
 | Substrate     | ✅ | ✅ |
 | MultiversX    | ✅ | ✅ |
+| Cosmos        | ✅ | ✅ |
+| TON           | ✅ | ✅ |
+| NEAR          | ✅ | ✅ |
+| Stellar       | ✅ | ✅ |
+| Filecoin      | ✅ | ✅ |
+| Algorand      | ✅ | ✅ |
+| Starknet      | ✅ | ✅ |
 
 ## Install
 
@@ -87,6 +95,7 @@ rawTx, _ := b.ConcatSignature(sig, false) // broadcast via rpc/evm or your own R
 | `rpc`, `rpc/<family>` | Online RPC handlers: fetch transaction context, broadcast, query status. These carry the network dependencies. |
 | `crypto`   | Self-contained cryptographic layer: mnemonic generation, keystore, Shamir secret sharing. |
 | `crypto/bip`, `crypto/key` | BIP-32/39/44 derivation and the ECDSA / Ed25519 / Schnorr / sr25519 signing primitives. |
+| `mobile`, `mobile/acc`, `mobile/tx` | Flat, `gomobile`-friendly bindings (string / `[]byte` APIs) for iOS & Android; build with `mobile/buildmobile.sh`. |
 
 The offline/online split is at the package level: `signing/*` pulls no network
 dependencies — an auditable offline core — while `rpc/*` carries the RPC clients.
