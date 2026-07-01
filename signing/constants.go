@@ -35,4 +35,9 @@ const (
 	FamilyOfSUI       = 9
 	FamilyOfEGLD      = 10
 	FamilyOfTON       = 11
+	FamilyOfStellar   = 12
+	FamilyOfNear      = 13
+	FamilyOfFilecoin  = 14
+	FamilyOfAlgorand  = 15
+	FamilyOfStarknet  = 16
 )

@@ -12,15 +12,23 @@ require (
 require (
 	cosmossdk.io/api v1.0.0
 	github.com/ChainSafe/go-schnorrkel v1.1.0
+	github.com/NethermindEth/juno v0.15.11
+	github.com/NethermindEth/starknet.go v0.17.1
+	github.com/algorand/go-codec/codec v1.1.10
 	github.com/blocto/solana-go-sdk v1.30.0
 	github.com/btcsuite/btcd/btcutil v1.1.6
 	github.com/btcsuite/btcd/btcutil/psbt v1.1.10
 	github.com/centrifuge/go-substrate-rpc-client/v4 v4.2.1
+	github.com/dchest/blake2b v1.0.0
+	github.com/fxamacker/cbor v1.5.1
 	github.com/google/uuid v1.6.0
 	github.com/gtank/merlin v0.1.1
 	github.com/hashicorp/vault v1.21.4
 	github.com/kaspanet/kaspad v0.12.23
-	github.com/mr-tron/base58 v1.2.0
+	github.com/mr-tron/base58 v1.3.0
+	github.com/multiformats/go-multibase v0.3.0
+	github.com/multiformats/go-multihash v0.2.3
+	github.com/near/borsh-go v0.3.2-0.20220516180422-1ff87d108454
 	github.com/pkg/errors v0.9.1
 	github.com/shopspring/decimal v1.4.0
 	github.com/tonkeeper/tongo v1.9.1
@@ -30,6 +38,7 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.1.1 // indirect
+	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20260607022201-88e0521b82d3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -38,9 +47,10 @@ require (
 	github.com/cosmos/gogoproto v1.7.2 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/deckarep/golang-set v1.8.0 // indirect
-	github.com/deckarep/golang-set/v2 v2.6.0 // indirect
+	github.com/deckarep/golang-set/v2 v2.8.0 // indirect
 	github.com/decred/base58 v1.0.4 // indirect
 	github.com/fjl/jsonw v0.1.0 // indirect
+	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
@@ -50,32 +60,38 @@ require (
 	github.com/jrick/logrotate v1.0.0 // indirect
 	github.com/kaspanet/go-muhash v0.0.4 // indirect
 	github.com/mimoo/StrobeGo v0.0.0-20220103164710-9a04d6ca976b // indirect
-	github.com/near/borsh-go v0.3.2-0.20220516180422-1ff87d108454 // indirect
+	github.com/minio/sha256-simd v1.0.1 // indirect
+	github.com/multiformats/go-base32 v0.1.0 // indirect
+	github.com/multiformats/go-base36 v0.2.0 // indirect
+	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20220328075252-7dd334e3daae // indirect
 	github.com/pierrec/xxHash v0.1.5 // indirect
-	github.com/rs/cors v1.8.2 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
+	github.com/rs/cors v1.11.1 // indirect
 	github.com/snksoft/crc v1.1.0 // indirect
-	github.com/tklauser/go-sysconf v0.3.12 // indirect
-	github.com/tklauser/numcpus v0.6.1 // indirect
+	github.com/spaolacci/murmur3 v1.1.0 // indirect
+	github.com/stretchr/testify v1.11.1 // indirect
+	github.com/tklauser/go-sysconf v0.3.15 // indirect
+	github.com/tklauser/numcpus v0.10.0 // indirect
 	github.com/vedhavyas/go-subkey/v2 v2.0.0 // indirect
+	github.com/x448/float16 v0.8.4 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel v1.41.0 // indirect
 	go.opentelemetry.io/otel/metric v1.41.0 // indirect
 	go.opentelemetry.io/otel/trace v1.41.0 // indirect
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
-	golang.org/x/mobile v0.0.0-20260611195102-4dd8f1dbf5d2 // indirect
-	golang.org/x/mod v0.37.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
-	golang.org/x/tools v0.46.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260209200024-4cfbd4190f57 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260209200024-4cfbd4190f57 // indirect
 	google.golang.org/grpc v1.79.1 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
+	lukechampine.com/blake3 v1.4.1 // indirect
 )
 
 require (
-	github.com/bits-and-blooms/bitset v1.20.0 // indirect
+	github.com/bits-and-blooms/bitset v1.24.0 // indirect
 	github.com/btcsuite/btclog v0.0.0-20170628155309-84c8d2346e9f // indirect
 	github.com/cmars/basen v0.0.0-20150613233007-fe3947df716e // indirect
 	github.com/consensys/gnark-crypto v0.18.2 // indirect

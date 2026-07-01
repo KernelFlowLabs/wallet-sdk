@@ -1,0 +1,101 @@
+//go:build near || !custom
+
+package tx
+
+import (
+	"strings"
+
+	"github.com/KernelFlowLabs/wallet-sdk/signing/near"
+)
+
+type NearTxBuilder struct {
+	in  *near.TxBuilder
+	err error
+}
+
+func NewNearTxBuilder() *NearTxBuilder {
+	return &NearTxBuilder{
+		in: near.NewTxBuilder(&near.Ingredient{}),
+	}
+}
+
+func (b *NearTxBuilder) SetTxType(txType string) *NearTxBuilder {
+	b.in.Ingredient.TxType = txType
+	return b
+}
+
+func (b *NearTxBuilder) SetContractAddress(addr string) *NearTxBuilder {
+	b.in.Ingredient.ContractAddress = addr
+	return b
+}
+
+func (b *NearTxBuilder) SetSender(addr string) *NearTxBuilder {
+	b.in.Ingredient.Sender = addr
+	return b
+}
+
+func (b *NearTxBuilder) SetSenderPublicKey(pubKeyHex string) *NearTxBuilder {
+	b.in.Ingredient.SenderPublicKey = pubKeyHex
+	return b
+}
+
+func (b *NearTxBuilder) SetRecipient(addr string) *NearTxBuilder {
+	b.in.Ingredient.Recipient = addr
+	return b
+}
+
+func (b *NearTxBuilder) SetAmount(amount string) *NearTxBuilder {
+	b.in.Ingredient.Amount = amount
+	return b
+}
+
+func (b *NearTxBuilder) SetNonce(nonce string) *NearTxBuilder {
+	b.in.Ingredient.Nonce = nonce
+	return b
+}
+
+func (b *NearTxBuilder) SetRequiredAmount(amount string) *NearTxBuilder {
+	b.in.Ingredient.RequiredAmount = amount
+	return b
+}
+
+func (b *NearTxBuilder) SetBlockHash(blockHash string) *NearTxBuilder {
+	b.in.Ingredient.BlockHash = blockHash
+	return b
+}
+
+func (b *NearTxBuilder) Build() error {
+	if b.err != nil {
+		return b.err
+	}
+	return b.in.Build()
+}
+
+func (b *NearTxBuilder) SigHash() string {
+	sh := b.in.GetSigHash()
+	if len(sh) == 0 {
+		return ""
+	}
+	return sh[0]
+}
+
+func (b *NearTxBuilder) UnsignedHex() string {
+	return b.in.GetUnsignedHex()
+}
+
+func (b *NearTxBuilder) Sign(privateKey []byte) (string, error) {
+	sig, err := b.in.Sign(privateKey)
+	if err != nil {
+		return "", err
+	}
+	WipeByte(privateKey)
+	return sig, nil
+}
+
+func (b *NearTxBuilder) ConcatSignature(signature string) (string, error) {
+	return b.in.ConcatSignature(strings.TrimPrefix(signature, "0x"), false)
+}
+
+func (b *NearTxBuilder) TxHash() string {
+	return b.in.GetTxHash()
+}
