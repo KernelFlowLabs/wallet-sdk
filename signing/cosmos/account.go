@@ -1,52 +1,50 @@
-package evm
+package cosmos
 
 import (
 	"encoding/hex"
 	"fmt"
+	"strings"
+
 	"github.com/KernelFlowLabs/wallet-sdk/crypto/key"
 	"github.com/KernelFlowLabs/wallet-sdk/signing"
-	"strings"
 )
 
 type Account struct {
 	privateKey []byte
 	publicKey  []byte
 	address    string
+	network    string
 }
 
-func NewAccountFromMnemonic(mnemonic, path string) (signing.AccountHandler, error) {
+func NewAccountFromMnemonic(mnemonic, path, network string) (signing.AccountHandler, error) {
 	privateKey, err := key.DerivePrivateKeyECDSA(mnemonic, path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to DerivePrivateKey: %v", err)
+		return nil, fmt.Errorf("DerivePrivateKeyECDSA: %v", err)
 	}
-	return NewAccountFromPrivateKey(privateKey)
+	return NewAccountFromPrivateKey(privateKey, network)
 }
 
-func NewAccountFromPrivateKey(privateKey []byte) (signing.AccountHandler, error) {
-	a := &Account{}
+func NewAccountFromPrivateKey(privateKey []byte, network string) (signing.AccountHandler, error) {
 	publicKey, err := key.PrivateKey2PublicKeyECDSA(privateKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to PrivateKey2PublicKeyECDSA: %v", err)
+		return nil, fmt.Errorf("PrivateKey2PublicKeyECDSA: %v", err)
 	}
-	address, err := PublicKey2Address(publicKey)
+	address, err := PublicKey2Address(publicKey, network)
 	if err != nil {
-		return nil, fmt.Errorf("failed to PublicKeyToAddress: %v", err)
+		return nil, fmt.Errorf("PublicKey2Address: %v", err)
 	}
-	if !ValidAddress(address) {
+	if !ValidAddress(address, network) {
 		return nil, fmt.Errorf("invalid address generated")
 	}
-	a.privateKey = privateKey
-	a.publicKey = publicKey
-	a.address = address
-	return a, nil
+	return &Account{privateKey: privateKey, publicKey: publicKey, address: address, network: network}, nil
 }
 
-func NewAccountFromPrivateKeyHex(privateKey string) (signing.AccountHandler, error) {
+func NewAccountFromPrivateKeyHex(privateKey, network string) (signing.AccountHandler, error) {
 	privateKeyBytes, err := hex.DecodeString(strings.TrimPrefix(privateKey, "0x"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to DecodeString privateKey: %v", err)
 	}
-	return NewAccountFromPrivateKey(privateKeyBytes)
+	return NewAccountFromPrivateKey(privateKeyBytes, network)
 }
 
 func (a *Account) PrivateKey() []byte {
@@ -70,11 +68,11 @@ func (a *Account) Address() string {
 }
 
 func (a *Account) SignData(data []byte) ([]byte, error) {
-	return key.SignWithPrivateKeyECDSAForEVM(a.privateKey, data)
+	return key.SignWithPrivateKeyECDSAForUTXO(a.privateKey, data)
 }
 
 func (a *Account) VerifySignData(data, sig []byte) bool {
-	return key.VerifySignatureECDSAForEVM(a.publicKey, data, sig)
+	return key.VerifySignatureECDSAForUTXO(a.publicKey, data, sig)
 }
 
 func (a *Account) Wipe() {

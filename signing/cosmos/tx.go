@@ -1,17 +1,24 @@
-package evm
+package cosmos
 
 import (
+	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"github.com/KernelFlowLabs/wallet-sdk/crypto/key"
-	"github.com/KernelFlowLabs/wallet-sdk/signing"
 	"math/big"
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
+	basev1beta1 "cosmossdk.io/api/cosmos/base/v1beta1"
+	bankv1beta1 "cosmossdk.io/api/cosmos/bank/v1beta1"
+	secp256k1v1beta1 "cosmossdk.io/api/cosmos/crypto/secp256k1"
+	signingv1beta1 "cosmossdk.io/api/cosmos/tx/signing/v1beta1"
+	txv1beta1 "cosmossdk.io/api/cosmos/tx/v1beta1"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
+
+	"github.com/KernelFlowLabs/wallet-sdk/signing"
 )
 
 func NewTxBuilder(ti *Ingredient, network string) *TxBuilder {
@@ -21,97 +28,111 @@ func NewTxBuilder(ti *Ingredient, network string) *TxBuilder {
 	}
 }
 
+func isValidInt(s string) bool {
+	_, ok := new(big.Int).SetString(s, 10)
+	return ok
+}
+
+// cosmosAny packs a proto message into an Any using the Cosmos SDK type-url
+// convention ("/" + fully-qualified name), which differs from anypb.New's
+// "type.googleapis.com/" prefix. The wire bytes must match this convention
+// for the signature to verify on-chain.
+func cosmosAny(m proto.Message) (*anypb.Any, error) {
+	value, err := proto.MarshalOptions{Deterministic: true}.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+	return &anypb.Any{TypeUrl: "/" + string(m.ProtoReflect().Descriptor().FullName()), Value: value}, nil
+}
+
 func (tx *TxBuilder) Build() error {
 	if tx == nil {
 		return fmt.Errorf("tx == nil")
 	}
-	if err := signing.Validator.Struct(tx.Ingredient); err != nil {
-		return fmt.Errorf("invalid ingredient: %v", err)
+
+	if tx.Ingredient.TxType != signing.TxTypeTransfer ||
+		tx.Ingredient.ContractAddress != signing.MagicContactAddressForNative {
+		return fmt.Errorf("only basecoin transfer supported on this chain")
+	}
+	denom := Denom(tx.network)
+	gasLimit, err := strconv.ParseUint(tx.Ingredient.GasLimit, 10, 64)
+	if err != nil {
+		return fmt.Errorf("fail to DecodeString for gasLimit, err=%v", err)
+	}
+	accountNumber, err := strconv.ParseUint(tx.Ingredient.AccountNumber, 10, 64)
+	if err != nil {
+		return fmt.Errorf("fail to DecodeString for accountNumber, err=%v", err)
+	}
+	sequence, err := strconv.ParseUint(tx.Ingredient.Sequence, 10, 64)
+	if err != nil {
+		return fmt.Errorf("fail to DecodeString for sequence, err=%v", err)
+	}
+	if !isValidInt(tx.Ingredient.Amount) {
+		return fmt.Errorf("invalid amount")
+	}
+	if !isValidInt(tx.Ingredient.FeeAmount) {
+		return fmt.Errorf("invalid feeAmount")
 	}
 
-	nonce, _ := strconv.ParseUint(tx.Ingredient.Nonce, 10, 64)
-	gasLimit, _ := strconv.ParseUint(tx.Ingredient.GasLimit, 10, 64)
+	sendMsg := &bankv1beta1.MsgSend{
+		FromAddress: tx.Ingredient.Sender,
+		ToAddress:   tx.Ingredient.Recipient,
+		Amount:      []*basev1beta1.Coin{{Denom: denom, Amount: tx.Ingredient.Amount}},
+	}
+	anySend, err := cosmosAny(sendMsg)
+	if err != nil {
+		return fmt.Errorf("fail to NewAnyWithValue for sendMsg, err=%v", err)
+	}
+	body := &txv1beta1.TxBody{Messages: []*anypb.Any{anySend}, Memo: tx.Ingredient.Memo, TimeoutHeight: 0}
 
-	var data []byte
-	var to common.Address
-	var value *big.Int
-	var ok bool
-	var err error
-	switch tx.Ingredient.TxType {
-	case signing.TxTypeTransfer:
-		if tx.Ingredient.Recipient == "" {
-			return fmt.Errorf("empty Recipient")
-		}
-		if tx.Ingredient.ContractAddress == signing.MagicContactAddressForNative {
-			value, ok = big.NewInt(0).SetString(tx.Ingredient.Amount, 10)
-			if !ok {
-				return fmt.Errorf("failed to SetString for Amount")
-			}
-			to = common.HexToAddress(tx.Ingredient.Recipient)
-			if tx.Ingredient.Memo != "" {
-				data, _ = hex.DecodeString(tx.Ingredient.Memo)
-			}
-		} else {
-			to = common.HexToAddress(tx.Ingredient.ContractAddress)
-			p := CallErc20In{
-				Recipient: tx.Ingredient.Recipient,
-				Amount:    tx.Ingredient.Amount,
-				Memo:      tx.Ingredient.Memo,
-			}
-			params, _ := json.Marshal(p)
-			hexData, err := PackPayloadForErc20("transfer", params)
-			if err != nil {
-				return fmt.Errorf("failed to PackPayloadForErc20, err=%v", err)
-			}
-			data, _ = hex.DecodeString(hexData)
-		}
-	case signing.TxTypeContractCall:
-		to = common.HexToAddress(tx.Ingredient.ContractAddress)
-		if len(tx.Ingredient.Payload) < 8 {
-			return fmt.Errorf("payload too short")
-		}
-		data, _ = hex.DecodeString(strings.TrimPrefix(tx.Ingredient.Payload, "0x"))
-		if tx.Ingredient.Amount != "" {
-			value, _ = big.NewInt(0).SetString(tx.Ingredient.Amount, 10)
-		}
-	default:
-		return fmt.Errorf("invalid txType")
+	if tx.Ingredient.SenderPublicKey == "" {
+		return fmt.Errorf("empty SenderPublicKey")
 	}
-	unsignedTx := &types.Transaction{}
-	if tx.Ingredient.IsLegacyTx == "true" {
-		gasPrice, _ := new(big.Int).SetString(tx.Ingredient.GasPrice, 10)
-		unsignedTx = types.NewTx(&types.LegacyTx{
-			Nonce:    nonce,
-			GasPrice: gasPrice,
-			Gas:      gasLimit,
-			To:       &to,
-			Value:    value,
-			Data:     data,
-		})
-	} else {
-		gasFeeCap, _ := new(big.Int).SetString(tx.Ingredient.GasFeeCap, 10)
-		gasTipCap, _ := new(big.Int).SetString(tx.Ingredient.GasTipCap, 10)
-		unsignedTx = types.NewTx(&types.DynamicFeeTx{
-			Nonce:     nonce,
-			To:        &to,
-			Value:     value,
-			Gas:       gasLimit,
-			GasFeeCap: gasFeeCap,
-			GasTipCap: gasTipCap,
-			Data:      data,
-		})
-	}
-	unsignedBytes, err := unsignedTx.MarshalBinary()
+	publickeyBytes, err := hex.DecodeString(tx.Ingredient.SenderPublicKey)
 	if err != nil {
-		return fmt.Errorf("failed to MarshalBinary for unsigned, err=%v", err)
+		return fmt.Errorf("fail to DecodeString for SenderPublicKey, err=%v", err)
 	}
-	tx.unsignedHex = hex.EncodeToString(unsignedBytes)
-	chainId, err := strconv.ParseInt(tx.network, 10, 64)
+	anyPubkey, err := cosmosAny(&secp256k1v1beta1.PubKey{Key: publickeyBytes})
 	if err != nil {
-		return fmt.Errorf("unsuppored chainId %d", chainId)
+		return fmt.Errorf("fail to NewAnyWithValue for pubkey, err=%v", err)
 	}
-	tx.sigHash = append(tx.sigHash, strings.TrimPrefix(types.NewLondonSigner(
-		big.NewInt(chainId)).Hash(unsignedTx).Hex(), "0x"))
+
+	modeInfo := &txv1beta1.ModeInfo{
+		Sum: &txv1beta1.ModeInfo_Single_{
+			Single: &txv1beta1.ModeInfo_Single{Mode: signingv1beta1.SignMode_SIGN_MODE_DIRECT},
+		},
+	}
+	signerInfos := []*txv1beta1.SignerInfo{
+		{PublicKey: anyPubkey, ModeInfo: modeInfo, Sequence: sequence},
+	}
+	fee := &txv1beta1.Fee{
+		Amount:   []*basev1beta1.Coin{{Denom: denom, Amount: tx.Ingredient.FeeAmount}},
+		GasLimit: gasLimit,
+	}
+	authInfo := &txv1beta1.AuthInfo{SignerInfos: signerInfos, Fee: fee}
+
+	mo := proto.MarshalOptions{Deterministic: true}
+	bodyBytes, err := mo.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("fail to Marshal for body, err=%v", err)
+	}
+	authInfoBytes, err := mo.Marshal(authInfo)
+	if err != nil {
+		return fmt.Errorf("fail to Marshal for authInfo, err=%v", err)
+	}
+	signDoc := &txv1beta1.SignDoc{
+		BodyBytes:     bodyBytes,
+		AuthInfoBytes: authInfoBytes,
+		ChainId:       tx.network,
+		AccountNumber: accountNumber,
+	}
+	signDocBytes, err := mo.Marshal(signDoc)
+	if err != nil {
+		return fmt.Errorf("fail to Marshal for signDoc, err=%v", err)
+	}
+	sigHash := sha256.Sum256(signDocBytes)
+	tx.sigHash = append(tx.sigHash, hex.EncodeToString(sigHash[:]))
+	tx.unsignedHex = hex.EncodeToString(signDocBytes)
 	return nil
 }
 
@@ -119,55 +140,52 @@ func (tx *TxBuilder) Sign(privateKey []byte) (string, error) {
 	if tx == nil {
 		return "", fmt.Errorf("tx == nil")
 	} else if len(tx.sigHash) != 1 {
-		return "", fmt.Errorf("len(tx.SigHash) != 1, =%d", len(tx.sigHash))
+		return "", fmt.Errorf("tx.SigHash == nil")
 	}
+
 	sigHash, err := hex.DecodeString(tx.sigHash[0])
 	if err != nil {
-		return "", fmt.Errorf("failed to DecodeString for SigHash, err=%v", err)
+		return "", fmt.Errorf("fail to DecodeString for SigHash, err=%v", err)
 	}
-	signature, err := key.SignWithPrivateKeyECDSAForEVM(privateKey, sigHash)
-	if err != nil {
-		return "", fmt.Errorf("failed to SignWithPrivateKey, err=%v", err)
-	}
-	return hex.EncodeToString(signature), nil
+	btcPrivateKey, _ := btcec.PrivKeyFromBytes(privateKey)
+	signData := ecdsa.SignCompact(btcPrivateKey, sigHash[:], false)
+	return hex.EncodeToString(signData[1:]), nil
 }
 
 func (tx *TxBuilder) ConcatSignature(signature string, isDerFormat bool) (string, error) {
 	if tx == nil {
 		return "", fmt.Errorf("tx == nil")
+	} else if tx.unsignedHex == "" {
+		return "", fmt.Errorf("tx.UnsignedHex == nil")
 	}
 
-	unsignedBytes, err := hex.DecodeString(tx.unsignedHex)
+	signDocBytes, err := hex.DecodeString(tx.unsignedHex)
 	if err != nil {
-		return "", fmt.Errorf("failed to DecodeString for UnsignedHex, err=%v", err)
+		return "", fmt.Errorf("fail to DecodeString for UnsignedHex, err=%v", err)
 	}
-	var ntx = types.Transaction{}
-	err = ntx.UnmarshalBinary(unsignedBytes)
-	if err != nil {
-		return "", fmt.Errorf("failed to UnmarshalBinary for unsignedBytes, err=%v", err)
+	var signDoc txv1beta1.SignDoc
+	if err := proto.Unmarshal(signDocBytes, &signDoc); err != nil {
+		return "", fmt.Errorf("fail to Unmarshal for signDocBytes, err=%v", err)
 	}
-
 	if isDerFormat {
-		return "", fmt.Errorf("DER signature format not supported")
+		return "", fmt.Errorf("der format not supported")
 	}
 	sigBytes, err := hex.DecodeString(signature)
 	if err != nil {
-		return "", fmt.Errorf("failed to DecodeString for Signature, err=%v", err)
+		return "", fmt.Errorf("fail to DecodeString for Signature, err=%v", err)
 	}
-	chainIdInt, err := strconv.ParseInt(tx.network, 10, 64)
+
+	trans := &txv1beta1.TxRaw{
+		BodyBytes:     signDoc.BodyBytes,
+		AuthInfoBytes: signDoc.AuthInfoBytes,
+		Signatures:    [][]byte{sigBytes},
+	}
+	transBytes, err := proto.MarshalOptions{Deterministic: true}.Marshal(trans)
 	if err != nil {
-		return "", fmt.Errorf("failed to ParseInt for Network, err=%v", err)
+		return "", fmt.Errorf("fail to Marshal for trans, err=%v", err)
 	}
-	stx, err := ntx.WithSignature(types.NewLondonSigner(big.NewInt(chainIdInt)), sigBytes)
-	if err != nil {
-		return "", fmt.Errorf("failed to WithSignature, err=%v", err)
-	}
-	tx.txHash = stx.Hash().Hex()
-	signedBytes, err := stx.MarshalBinary()
-	if err != nil {
-		return "", fmt.Errorf("failed to MarshalBinary for stx, err=%v", err)
-	}
-	return hex.EncodeToString(signedBytes), nil
+	tx.txHash = strings.ToUpper(fmt.Sprintf("%x", sha256.Sum256(transBytes)))
+	return hex.EncodeToString(transBytes), nil
 }
 
 func (tx *TxBuilder) GetTxHash() string {
@@ -190,22 +208,22 @@ func (tx *TxBuilder) SetUnsignedHex(unsignedHex string) {
 	tx.unsignedHex = unsignedHex
 }
 
-// types
 type (
+	AccountInfo struct {
+		AccountNumber string `json:"accountNumber"`
+		Sequence      string `json:"sequence"`
+	}
 	Ingredient struct {
-		TxType          string `json:"txType" validate:"required,oneof=0 1 2 3 4 5 6"`
-		ContractAddress string `json:"contractAddress" validate:"required,evm_addr"`
-		Sender          string `json:"sender" validate:"required,evm_addr"`
-		Recipient       string `json:"recipient,omitempty" validate:"omitempty,evm_addr"`
-		Amount          string `json:"amount,omitempty" validate:"omitempty,bigint_gte0"`
-		Payload         string `json:"payload,omitempty" validate:"omitempty,hex_str"`
-		Memo            string `json:"memo,omitempty" validate:"omitempty,hex_str"`
-		Nonce           string `json:"nonce" validate:"required,u64"`
-		GasPrice        string `json:"gasPrice,omitempty" validate:"omitempty,bigint_gt0"`
-		GasFeeCap       string `json:"gasFeeCap,omitempty" validate:"omitempty,bigint_gt0"`
-		GasTipCap       string `json:"gasTipCap,omitempty" validate:"omitempty,bigint_gt0"`
-		GasLimit        string `json:"gasLimit" validate:"required,u64_gt0"`
-		IsLegacyTx      string `json:"isLegacyTx" validate:"required,bool_str"`
+		TxType          string `json:"txType"`
+		ContractAddress string `json:"contractAddress"`
+		Sender          string `json:"sender"`
+		SenderPublicKey string `json:"senderPublicKey"`
+		Recipient       string `json:"recipient"`
+		Amount          string `json:"amount"`
+		FeeAmount       string `json:"feeAmount"`
+		GasLimit        string `json:"gasLimit"`
+		Memo            string `json:"memo"`
+		*AccountInfo
 	}
 	TxBuilder struct {
 		*Ingredient
