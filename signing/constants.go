@@ -34,4 +34,5 @@ const (
 	FamilyOfAPT       = 8
 	FamilyOfSUI       = 9
 	FamilyOfEGLD      = 10
+	FamilyOfTON       = 11
 )

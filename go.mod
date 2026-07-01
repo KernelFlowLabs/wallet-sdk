@@ -23,6 +23,7 @@ require (
 	github.com/mr-tron/base58 v1.2.0
 	github.com/pkg/errors v0.9.1
 	github.com/shopspring/decimal v1.4.0
+	github.com/tonkeeper/tongo v1.9.1
 	golang.org/x/time v0.13.0
 	google.golang.org/protobuf v1.36.11
 )
@@ -50,8 +51,10 @@ require (
 	github.com/kaspanet/go-muhash v0.0.4 // indirect
 	github.com/mimoo/StrobeGo v0.0.0-20220103164710-9a04d6ca976b // indirect
 	github.com/near/borsh-go v0.3.2-0.20220516180422-1ff87d108454 // indirect
+	github.com/oasisprotocol/curve25519-voi v0.0.0-20220328075252-7dd334e3daae // indirect
 	github.com/pierrec/xxHash v0.1.5 // indirect
 	github.com/rs/cors v1.8.2 // indirect
+	github.com/snksoft/crc v1.1.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/vedhavyas/go-subkey/v2 v2.0.0 // indirect
@@ -60,6 +63,7 @@ require (
 	go.opentelemetry.io/otel v1.41.0 // indirect
 	go.opentelemetry.io/otel/metric v1.41.0 // indirect
 	go.opentelemetry.io/otel/trace v1.41.0 // indirect
+	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
 	golang.org/x/mobile v0.0.0-20260611195102-4dd8f1dbf5d2 // indirect
 	golang.org/x/mod v0.37.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
