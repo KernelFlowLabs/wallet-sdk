@@ -27,10 +27,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("derive account: %v", err)
 	}
-	sender := a.Address() // NEAR implicit account = ed25519 public key hex
+	sender := a.Address()
 	pubHex := hex.EncodeToString(a.PublicKey())
 	recipient := sender
-	amount := "1000000000000000000000000" // 1 NEAR (yocto)
+	amount := "1000000000000000000000000"
 	fmt.Println("1. address (implicit account) from mnemonic:", sender)
 
 	h, err := nearrpc.NewHandler(rpcURL)
@@ -44,7 +44,7 @@ func main() {
 	}
 	nonce, err := h.InquireChain(ctx, "getNonce", pubHex+":"+sender)
 	if err != nil {
-		// implicit account not activated yet (no funds / no access key on chain)
+
 		nonce = "1"
 		fmt.Printf("2. account not activated (%v); using nonce=1 to demo build/sign\n", err)
 	} else {

@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/NethermindEth/starknet.go/utils"
+	caigotypes "github.com/dontpanicdao/caigo/types"
 
 	chainrpc "github.com/KernelFlowLabs/wallet-sdk/rpc"
 	"github.com/KernelFlowLabs/wallet-sdk/signing"
@@ -27,7 +27,7 @@ func NewHandler(url string) (*Handler, error) {
 	return &Handler{rpc: chainrpc.NewRequest(url, map[string]string{"Content-Type": "application/json"})}, nil
 }
 
-func balanceOfSelector() string { return utils.GetSelectorFromNameFelt("balanceOf").String() }
+func balanceOfSelector() string { return "0x" + caigotypes.GetSelectorFromName("balanceOf").Text(16) }
 
 func expandAddress(address string) string {
 	rest := strings.TrimPrefix(address, "0x")
@@ -67,7 +67,7 @@ func (h *Handler) GetBalance(ctx context.Context, address, contractAddress, bloc
 	} else if res.Error != nil {
 		return "", fmt.Errorf("fail to GetBalance, errMsg=%v", res.Error.Message)
 	}
-	// uint256 low + high
+
 	low := hexToBig(res.Result[0])
 	if len(res.Result) > 1 {
 		high := hexToBig(res.Result[1])
@@ -88,7 +88,7 @@ func (h *Handler) GetTransfersByHash(ctx context.Context, hash string, confirmat
 		r.ErrMsg = "not a succeeded tx"
 		return r, nil
 	}
-	// v3 invoke calldata = [num_calls, to, selector, calldata_len, recipient, amount_lo, amount_hi]
+
 	req := &_BaseRequest{JsonRPC: "2.0", ID: "0", Method: "starknet_getTransactionByHash",
 		Params: []string{hash}}
 	res := &_GetTransactionByHash{}
@@ -188,7 +188,7 @@ func (h *Handler) InquireChain(ctx context.Context, instruction, params string) 
 				map[string]interface{}{
 					"calldata":             []string{},
 					"contract_address":     params,
-					"entry_point_selector": utils.GetSelectorFromNameFelt("decimals").String(),
+					"entry_point_selector": "0x" + caigotypes.GetSelectorFromName("decimals").Text(16),
 				},
 				"latest",
 			}}
@@ -200,7 +200,7 @@ func (h *Handler) InquireChain(ctx context.Context, instruction, params string) 
 		}
 		return hexToBig(res.Result[0]).String(), nil
 	case "estimateFee":
-		// params: hex-encoded signed InvokeTxnV3 JSON.
+
 		txBytes, err := hex.DecodeString(strings.TrimPrefix(params, "0x"))
 		if err != nil {
 			return "", fmt.Errorf("estimateFee: bad params, err=%v", err)
@@ -240,7 +240,6 @@ func hexToBig(s string) *big.Int {
 	return n
 }
 
-// bump adds a 50% safety margin to an estimated resource value (hex in, dec out).
 func bump(hexVal string) string {
 	n := hexToBig(hexVal)
 	n.Mul(n, big.NewInt(3))

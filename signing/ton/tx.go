@@ -20,8 +20,6 @@ import (
 	"github.com/KernelFlowLabs/wallet-sdk/signing"
 )
 
-// nowFunc is overridable in tests to make the time-dependent ValidUntil /
-// QueryId reproducible; production uses the wall clock.
 var nowFunc = time.Now
 
 func NewTxBuilder(ti *Ingredient) *TxBuilder {
@@ -194,9 +192,7 @@ func (tx *TxBuilder) ConcatSignature(signature string, isDerFormat bool) (string
 	if err != nil {
 		return "", fmt.Errorf("fail to DecodeString for Signature, err=%v", err)
 	}
-	// A JSON-deserialized cell has a fixed-size buffer and cannot be appended
-	// to, so rebuild the body into a fresh writable cell (same bits and refs)
-	// before writing the 512-bit signature at the end.
+
 	bodyCell := boc.NewCell()
 	if err := bodyCell.WriteBitString(parsed.RawBitString()); err != nil {
 		return "", fmt.Errorf("fail to WriteBitString, err=%v", err)

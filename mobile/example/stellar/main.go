@@ -28,7 +28,7 @@ func main() {
 	}
 	sender := a.Address()
 	recipient := sender
-	amount := "247040000000" // stroops
+	amount := "247040000000"
 	fmt.Println("1. address from mnemonic:", sender)
 
 	h, err := stellarrpc.NewHandler(rpcURL)

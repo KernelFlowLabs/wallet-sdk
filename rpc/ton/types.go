@@ -1,6 +1,5 @@
 package ton
 
-// types
 type (
 	ApiBlock struct {
 		Error        string           `json:"error,omitempty"`

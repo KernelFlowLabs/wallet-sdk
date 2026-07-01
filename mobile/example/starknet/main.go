@@ -35,7 +35,7 @@ func build(a *acc.StarknetAccount, sender, nonce string, b bounds) (string, stri
 		SetContractAddress(signing.MagicContactAddressForNative).
 		SetSender(sender).
 		SetRecipient(sender).
-		SetAmount("1000000000000"). // 0.000001 ETH
+		SetAmount("1000000000000").
 		SetNonce(nonce).
 		SetL1GasMaxAmount(b.L1GasMaxAmount).SetL1GasMaxPrice(b.L1GasMaxPrice).
 		SetL1DataGasMaxAmount(b.L1DataGasMaxAmount).SetL1DataGasMaxPrice(b.L1DataGasMaxPrice).
@@ -76,7 +76,6 @@ func main() {
 	}
 	fmt.Println("2. nonce:", nonce)
 
-	// Provisional bounds: any well-formed values; estimateFee returns real ones.
 	prov := bounds{
 		L1GasMaxAmount: "1000", L1GasMaxPrice: "100000000000000",
 		L1DataGasMaxAmount: "10000", L1DataGasMaxPrice: "100000000000000",
@@ -87,8 +86,6 @@ func main() {
 		log.Fatalf("build provisional: %v", err)
 	}
 
-	// estimateFee runs the account's __validate__ (checks the signature). If it
-	// returns an estimate, the v3 hash + STARK signature are correct (no STRK needed).
 	estStr, err := h.InquireChain(ctx, "estimateFee", provSigned)
 	if err != nil {
 		log.Fatalf("estimateFee (signature validation): %v", err)

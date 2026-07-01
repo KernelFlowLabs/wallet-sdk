@@ -3,8 +3,6 @@
 package tx
 
 import (
-	"strings"
-
 	"github.com/KernelFlowLabs/wallet-sdk/signing/starknet"
 )
 
@@ -88,7 +86,7 @@ func (b *StarknetTxBuilder) Sign(privateKey []byte) (string, error) {
 }
 
 func (b *StarknetTxBuilder) ConcatSignature(signature string) (string, error) {
-	return b.in.ConcatSignature(strings.TrimPrefix(signature, "0x"), false)
+	return b.in.ConcatSignature(signature, false)
 }
 
 func (b *StarknetTxBuilder) TxHash() string { return b.in.GetTxHash() }

@@ -3,7 +3,6 @@ package stellar
 import "fmt"
 import "time"
 
-// types
 func (err *_ErrorResponse) Error() string {
 	return fmt.Sprintf("RPC ERROR title=%s,status=%d,detail=%s,extras=%v",
 		err.Title, err.Status, err.Detail, err.Extras)
@@ -137,9 +136,7 @@ type (
 			Effects    _HalLink `json:"effects"`
 			Precedes   _HalLink `json:"precedes"`
 			Succeeds   _HalLink `json:"succeeds"`
-			// Temporarily include Transaction as a link so that Transaction
-			// can be fully compatible with TransactionSuccess
-			// When TransactionSuccess is removed from the SDKs we can remove this HAL link
+
 			Transaction _HalLink `json:"transaction"`
 		} `json:"_links"`
 		ID                 string               `json:"id"`
@@ -184,12 +181,12 @@ type (
 		Embedded struct {
 			Records []_Ledger
 		} `json:"_embedded"`
-		//create_account
+
 		_RpcBase
 		StartingBalance string `json:"starting_balance"`
 		Funder          string `json:"funder"`
 		Account         string `json:"account"`
-		//payment
+
 		AssetType string `json:"asset_type"`
 		From      string `json:"from"`
 		To        string `json:"to"`

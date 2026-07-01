@@ -16,8 +16,6 @@ type _BaseResponse struct {
 	}
 }
 
-// _Message mirrors the JSON shape a signed Filecoin message serializes to
-// (BigInt fields are strings on the wire).
 type _Message struct {
 	Version    uint64 `json:"Version"`
 	To         string `json:"To"`

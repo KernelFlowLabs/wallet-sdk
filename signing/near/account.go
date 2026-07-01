@@ -31,7 +31,7 @@ func NewAccountFromPrivateKey(privateKey []byte) (signing.AccountHandler, error)
 		return nil, fmt.Errorf("invalid private key length %d", len(privateKey))
 	}
 	publicKey := ed25519.NewKeyFromSeed(privateKey).Public().(ed25519.PublicKey)
-	// NEAR implicit account id is the hex-encoded ed25519 public key.
+
 	address := hex.EncodeToString(publicKey)
 	return &Account{privateKey: privateKey, publicKey: publicKey, address: address}, nil
 }
@@ -60,14 +60,10 @@ func (a *Account) PublicKeyHex() string {
 	return hex.EncodeToString(a.publicKey)
 }
 
-// PrivateKeyBase58 returns the NEAR-style base58 secret key (64-byte
-// ed25519 private key: seed || public key).
 func (a *Account) PrivateKeyBase58() string {
 	return base58.Encode(ed25519.NewKeyFromSeed(a.privateKey))
 }
 
-// PublicKeyBase58 returns the base58-encoded public key (the part after
-// "ed25519:" in NEAR key strings).
 func (a *Account) PublicKeyBase58() string {
 	return base58.Encode(a.publicKey)
 }

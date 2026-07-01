@@ -14,9 +14,6 @@ const (
 	tonSeedSalt       = "TON default seed"
 )
 
-// derivePrivateKey implements the TON mnemonic-to-seed scheme (HMAC-SHA512 of
-// the mnemonic keyed derivation, then PBKDF2 with the "TON default seed" salt).
-// Unlike BIP-44 chains it takes no derivation path.
 func derivePrivateKey(mnemonic string) ([]byte, error) {
 	mac := hmac.New(sha512.New, []byte(mnemonic))
 	mac.Write([]byte(""))
@@ -34,8 +31,6 @@ func ValidAddress(address string) bool {
 	return true
 }
 
-// AddressToRaw converts a user-friendly address (EQ.../UQ...) to raw form
-// (workchain:hash).
 func AddressToRaw(s string) (string, error) {
 	addr, err := tongo.ParseAddress(s)
 	if err != nil {
@@ -52,7 +47,6 @@ func RawToAddress(raw string) (string, error) {
 	return id.ToHuman(false, false), nil
 }
 
-// AddressToBounce returns the bounceable (EQ...) form.
 func AddressToBounce(s string) (string, error) {
 	addr, err := tongo.ParseAddress(s)
 	if err != nil {
@@ -61,7 +55,6 @@ func AddressToBounce(s string) (string, error) {
 	return addr.ID.ToHuman(true, false), nil
 }
 
-// AddressToNoBounce returns the non-bounceable (UQ...) form.
 func AddressToNoBounce(s string) (string, error) {
 	addr, err := tongo.ParseAddress(s)
 	if err != nil {

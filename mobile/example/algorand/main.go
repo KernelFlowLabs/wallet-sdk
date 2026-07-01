@@ -29,7 +29,7 @@ func main() {
 	}
 	sender := a.Address()
 	recipient := sender
-	amount := "300000" // microAlgos (min 0.2 ALGO)
+	amount := "300000"
 	fmt.Println("1. address from mnemonic:", sender)
 
 	h, err := algorandrpc.NewHandler(rpcURL)

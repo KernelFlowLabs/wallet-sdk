@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	basev1beta1 "cosmossdk.io/api/cosmos/base/v1beta1"
 	bankv1beta1 "cosmossdk.io/api/cosmos/bank/v1beta1"
+	basev1beta1 "cosmossdk.io/api/cosmos/base/v1beta1"
 	secp256k1v1beta1 "cosmossdk.io/api/cosmos/crypto/secp256k1"
 	signingv1beta1 "cosmossdk.io/api/cosmos/tx/signing/v1beta1"
 	txv1beta1 "cosmossdk.io/api/cosmos/tx/v1beta1"
@@ -33,10 +33,6 @@ func isValidInt(s string) bool {
 	return ok
 }
 
-// cosmosAny packs a proto message into an Any using the Cosmos SDK type-url
-// convention ("/" + fully-qualified name), which differs from anypb.New's
-// "type.googleapis.com/" prefix. The wire bytes must match this convention
-// for the signature to verify on-chain.
 func cosmosAny(m proto.Message) (*anypb.Any, error) {
 	value, err := proto.MarshalOptions{Deterministic: true}.Marshal(m)
 	if err != nil {

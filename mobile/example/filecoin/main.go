@@ -29,7 +29,7 @@ func main() {
 	}
 	sender := a.Address()
 	recipient := sender
-	amount := "1000000000000000000" // 1 FIL (attoFIL)
+	amount := "1000000000000000000"
 	fmt.Println("1. address from mnemonic:", sender)
 
 	h, err := filecoinrpc.NewHandler(rpcURL)

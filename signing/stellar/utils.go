@@ -9,11 +9,11 @@ import (
 type VersionByte byte
 
 const (
-	VersionByteAccountID    VersionByte = 6 << 3  // Base32-encodes to 'G...'
-	VersionByteSeed                     = 18 << 3 // Base32-encodes to 'S...'
-	VersionByteMuxedAccount             = 12 << 3 // Base32-encodes to 'M...'
-	VersionByteHashTx                   = 19 << 3 // Base32-encodes to 'T...'
-	VersionByteHashX                    = 23 << 3 // Base32-encodes to 'X...'
+	VersionByteAccountID    VersionByte = 6 << 3
+	VersionByteSeed                     = 18 << 3
+	VersionByteMuxedAccount             = 12 << 3
+	VersionByteHashTx                   = 19 << 3
+	VersionByteHashX                    = 23 << 3
 )
 const maxPayloadSize = 40
 const maxRawSize = 1 + maxPayloadSize + 2
@@ -129,7 +129,6 @@ func encode(version VersionByte, src []byte) (string, error) {
 	crc := crc16Checksum(raw[:1+payloadSize])
 	binary.LittleEndian.PutUint16(raw[1+payloadSize:], crc)
 
-	// base32 encode
 	encArr := [maxEncodedSize]byte{}
 	encSize := base32.StdEncoding.WithPadding(base32.NoPadding).EncodedLen(rawSize)
 	enc := encArr[:encSize]
@@ -166,8 +165,7 @@ func decode(expected VersionByte, string string) ([]byte, error) {
 }
 
 func ValidAddress(address string) bool {
-	// decode enforces the account-id version byte ('G...') and validates the
-	// crc16 checksum, so wrong-length, mistyped, or corrupted addresses fail.
+
 	_, err := decode(VersionByteAccountID, address)
 	return err == nil
 }

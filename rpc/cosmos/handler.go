@@ -251,7 +251,6 @@ func (h *Handler) InquireChain(ctx context.Context, instruction, params string) 
 	return "", fmt.Errorf("unsupported function")
 }
 
-// unexported response types
 type _BaseResponse struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`

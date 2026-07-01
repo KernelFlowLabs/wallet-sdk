@@ -6,15 +6,15 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/NethermindEth/starknet.go/curve"
+	"github.com/dontpanicdao/caigo"
 
 	"github.com/KernelFlowLabs/wallet-sdk/crypto/bip"
 	"github.com/KernelFlowLabs/wallet-sdk/signing"
 )
 
 type Account struct {
-	privateKey []byte // STARK field element, big-endian
-	publicKey  []byte // public key x-coordinate, big-endian
+	privateKey []byte
+	publicKey  []byte
 	address    string
 }
 
@@ -27,7 +27,10 @@ func NewAccountFromMnemonic(mnemonic, path string) (signing.AccountHandler, erro
 }
 
 func NewAccountFromPrivateKey(privateKey []byte) (signing.AccountHandler, error) {
-	x, _ := curve.PrivateKeyToPoint(new(big.Int).SetBytes(privateKey))
+	x, _, err := caigo.Curve.PrivateToPoint(new(big.Int).SetBytes(privateKey))
+	if err != nil {
+		return nil, fmt.Errorf("PrivateToPoint: %v", err)
+	}
 	publicKey := x.Bytes()
 	address, err := PublicKey2Address(publicKey)
 	if err != nil {
@@ -47,9 +50,6 @@ func NewAccountFromPrivateKeyHex(privateKey string) (signing.AccountHandler, err
 	return NewAccountFromPrivateKey(privateKeyBytes)
 }
 
-// derivePrivateKey implements Starknet's key derivation: a BIP-44 secp256k1
-// key at m/44'/60'/0'/0/0, re-derived at the caller path, then grindKey'd
-// into the STARK curve order.
 func derivePrivateKey(mnemonic, path string) ([]byte, error) {
 	seed, err := bip.NewSeedWithErrorChecking(mnemonic, "")
 	if err != nil {
@@ -72,10 +72,8 @@ func (a *Account) PrivateKeyHex() string { return hex.EncodeToString(a.privateKe
 func (a *Account) PublicKeyHex() string  { return "0x" + new(big.Int).SetBytes(a.publicKey).Text(16) }
 func (a *Account) Address() string       { return a.address }
 
-// SignData signs a field element (data as a big-endian big.Int) with the STARK
-// curve and returns r||s (each 32-byte big-endian).
 func (a *Account) SignData(data []byte) ([]byte, error) {
-	r, s, err := curve.Sign(new(big.Int).SetBytes(data), new(big.Int).SetBytes(a.privateKey))
+	r, s, err := caigo.Curve.Sign(new(big.Int).SetBytes(data), new(big.Int).SetBytes(a.privateKey))
 	if err != nil {
 		return nil, err
 	}
@@ -89,10 +87,19 @@ func (a *Account) VerifySignData(data, sig []byte) bool {
 	if len(sig) != 64 {
 		return false
 	}
+	msg := new(big.Int).SetBytes(data)
 	r := new(big.Int).SetBytes(sig[:32])
 	s := new(big.Int).SetBytes(sig[32:])
-	ok, err := curve.Verify(new(big.Int).SetBytes(data), r, s, new(big.Int).SetBytes(a.publicKey))
-	return err == nil && ok
+	x := new(big.Int).SetBytes(a.publicKey)
+	y := caigo.Curve.GetYCoordinate(x)
+	if y == nil {
+		return false
+	}
+	if caigo.Curve.Verify(msg, r, s, x, y) {
+		return true
+	}
+	negY := new(big.Int).Sub(caigo.Curve.P, y)
+	return caigo.Curve.Verify(msg, r, s, x, negY)
 }
 
 func (a *Account) Wipe() {

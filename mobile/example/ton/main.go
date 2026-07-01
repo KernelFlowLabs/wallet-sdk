@@ -13,8 +13,6 @@ import (
 	"github.com/KernelFlowLabs/wallet-sdk/signing"
 )
 
-// TON derives its key straight from the mnemonic (PBKDF2), with no BIP-44
-// path, so the path argument is unused.
 const path = ""
 
 const (
@@ -31,7 +29,7 @@ func main() {
 	}
 	sender := a.Address()
 	recipient := sender
-	amount := "100000000" // 0.1 TON (nanoton)
+	amount := "100000000"
 	fmt.Println("1. address from mnemonic:", sender)
 
 	h, err := tonrpc.NewHandler(rpcURL)

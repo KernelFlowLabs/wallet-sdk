@@ -56,8 +56,6 @@ func ValidAddress(address, network string) bool {
 	return err == nil && hrp == prefix
 }
 
-// Denom returns the base-denom for a network (e.g. "uatom" for cosmoshub-4),
-// exported for the rpc handler which lives in a sibling package.
 func Denom(network string) string {
 	_, _, denom := getParamsByNetwork(network)
 	return denom

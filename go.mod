@@ -12,8 +12,6 @@ require (
 require (
 	cosmossdk.io/api v1.0.0
 	github.com/ChainSafe/go-schnorrkel v1.1.0
-	github.com/NethermindEth/juno v0.15.11
-	github.com/NethermindEth/starknet.go v0.17.1
 	github.com/algorand/go-codec/codec v1.1.10
 	github.com/blocto/solana-go-sdk v1.30.0
 	github.com/btcsuite/btcd/btcutil v1.1.6
@@ -38,10 +36,15 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.1.1 // indirect
-	github.com/Masterminds/semver/v3 v3.4.0 // indirect
+	github.com/DataDog/zstd v1.5.7 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20260607022201-88e0521b82d3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/cockroachdb/errors v1.12.0 // indirect
+	github.com/cockroachdb/fifo v0.0.0-20240816210425-c5d0cb0b6fc0 // indirect
+	github.com/cockroachdb/logtags v0.0.0-20241215232642-bb51bb14a506 // indirect
+	github.com/cockroachdb/redact v1.1.6 // indirect
+	github.com/cockroachdb/tokenbucket v0.0.0-20250429170803-42689b6311bb // indirect
 	github.com/cosmos/cosmos-proto v1.0.0-beta.5 // indirect
 	github.com/cosmos/go-bip39 v1.0.0 // indirect
 	github.com/cosmos/gogoproto v1.7.2 // indirect
@@ -50,11 +53,12 @@ require (
 	github.com/deckarep/golang-set/v2 v2.8.0 // indirect
 	github.com/decred/base58 v1.0.4 // indirect
 	github.com/fjl/jsonw v0.1.0 // indirect
-	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
+	github.com/getsentry/sentry-go v0.35.1 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
+	github.com/google/go-querystring v1.2.0 // indirect
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/gtank/ristretto255 v0.1.2 // indirect
 	github.com/jrick/logrotate v1.0.0 // indirect
@@ -66,11 +70,11 @@ require (
 	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20220328075252-7dd334e3daae // indirect
 	github.com/pierrec/xxHash v0.1.5 // indirect
-	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
+	github.com/prometheus/client_golang v1.23.0 // indirect
+	github.com/prometheus/procfs v0.17.0 // indirect
 	github.com/rs/cors v1.11.1 // indirect
 	github.com/snksoft/crc v1.1.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
-	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/tklauser/go-sysconf v0.3.15 // indirect
 	github.com/tklauser/numcpus v0.10.0 // indirect
 	github.com/vedhavyas/go-subkey/v2 v2.0.0 // indirect
@@ -81,12 +85,14 @@ require (
 	go.opentelemetry.io/otel/metric v1.41.0 // indirect
 	go.opentelemetry.io/otel/trace v1.41.0 // indirect
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
+	golang.org/x/mobile v0.0.0-20260611195102-4dd8f1dbf5d2 // indirect
+	golang.org/x/mod v0.37.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
+	golang.org/x/tools v0.46.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260209200024-4cfbd4190f57 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260209200024-4cfbd4190f57 // indirect
 	google.golang.org/grpc v1.79.1 // indirect
 	gopkg.in/natefinch/npipe.v2 v2.0.0-20160621034901-c1b8fa8bdcce // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
 )
 
@@ -116,6 +122,7 @@ require (
 	github.com/FactomProject/basen v0.0.0-20150613233007-fe3947df716e
 	github.com/FactomProject/btcutilecc v0.0.0-20130527213604-d3a63a5752ec
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
+	github.com/dontpanicdao/caigo v0.4.1
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
 	golang.org/x/crypto v0.53.0
 	golang.org/x/sys v0.46.0 // indirect

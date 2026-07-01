@@ -2,7 +2,6 @@ package near
 
 import "fmt"
 
-// types
 func (err *_ErrorResponse) Error() string {
 	return fmt.Sprintf("RPC ERROR code=%d,message=%s,data=%s", err.Code, err.Message, err.Data)
 }
