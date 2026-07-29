@@ -1,0 +1,103 @@
+name: Release mobile binaries
+
+# Manually dispatched against an existing v* tag; publishes gomobile bindings
+# as GitHub Release assets in two flavors, so consumers can download and
+# checksum-verify the one they need:
+#   wallet_mobile.aar                    Android AAR, all chains
+#   wallet_mobile_evm_sol.aar            Android AAR, evm + sol only (smaller)
+#   WalletMobile.xcframework.zip         iOS xcframework, all chains
+#   WalletMobile_evm_sol.xcframework.zip iOS xcframework, evm + sol only
+#   checksums.txt                        sha256 of all four
+# A consumer that only needs EVM + SOL (e.g. rwa-mobile) should pin the
+# *_evm_sol.* assets.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing v* tag to build and release'
+        required: true
+
+permissions:
+  contents: write      # create release + upload assets
+  id-token: write      # attest-build-provenance
+  attestations: write
+
+jobs:
+  build:
+    runs-on: macos-latest   # macOS builds both the AAR and the xcframework
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+
+      - name: Install gomobile
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          go install golang.org/x/mobile/cmd/gobind@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: gomobile init
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: gomobile init
+
+      - name: Build evm+sol bindings
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          sh mobile/buildmobile.sh all "evm sol"
+          mv dist/wallet_mobile.aar dist/wallet_mobile_evm_sol.aar
+          mv dist/WalletMobile.xcframework dist/WalletMobile_evm_sol.xcframework
+
+      - name: Build full (all chains) bindings
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: sh mobile/buildmobile.sh all ""
+
+      - name: Package + checksum
+        run: |
+          cd dist
+          zip -r WalletMobile.xcframework.zip WalletMobile.xcframework
+          zip -r WalletMobile_evm_sol.xcframework.zip WalletMobile_evm_sol.xcframework
+          shasum -a 256 \
+            wallet_mobile.aar \
+            wallet_mobile_evm_sol.aar \
+            WalletMobile.xcframework.zip \
+            WalletMobile_evm_sol.xcframework.zip > checksums.txt
+          cat checksums.txt
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: |
+            dist/wallet_mobile.aar
+            dist/wallet_mobile_evm_sol.aar
+            dist/WalletMobile.xcframework.zip
+            dist/WalletMobile_evm_sol.xcframework.zip
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          files: |
+            dist/wallet_mobile.aar
+            dist/wallet_mobile_evm_sol.aar
+            dist/WalletMobile.xcframework.zip
+            dist/WalletMobile_evm_sol.xcframework.zip
+            dist/checksums.txt

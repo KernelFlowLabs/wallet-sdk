@@ -1,0 +1,26 @@
+KernelFlow Wallet SDK
+Copyright 2026 KernelFlow Labs
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It includes third-party code that is vendored into this repository and remains
+under its own license. Attribution:
+
+--------------------------------------------------------------------------------
+crypto/bip/bip39.go, crypto/bip/english.go
+  Derived from github.com/tyler-smith/go-bip39 — MIT License
+  Copyright (c) 2014 Tyler Smith
+  License text: crypto/bip/LICENSE.go-bip39
+
+crypto/bip/bip32.go, crypto/bip/bip32utils.go
+  Derived from github.com/FactomProject/go-bip32 (a fork of
+  github.com/tyler-smith/go-bip32) — MIT License
+  Copyright (c) 2014 Tyler Smith; Copyright (c) The Factom Project
+  License text: crypto/bip/LICENSE.go-bip32
+--------------------------------------------------------------------------------
+
+The signing/aptos, signing/multiversx, signing/sui, signing/tron,
+signing/substrate and signing/kaspa packages (BCS / protobuf / SCALE
+serialization, kaspa script building and transaction building) are original
+implementations written from the respective protocol specifications and carry
+no third-party code.
