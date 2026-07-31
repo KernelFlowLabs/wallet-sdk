@@ -223,9 +223,7 @@ func (h *Handler) InquireChain(ctx context.Context, instruction, params string) 
 				IsCoinbase:    strconv.FormatBool(utxo.IsCoinbase),
 				BlockDAAScore: strconv.FormatUint(utxo.BlockDAAScore, 10),
 			}
-			if utxoInfo.Hash != "e0cedb45a7231772245bcf668c428dad8e3c64ee2761dcff0d95fa149f3dd4a2" {
-				res.List = append(res.List, utxoInfo)
-			}
+			res.List = append(res.List, utxoInfo)
 		}
 		resBytes, err := json.Marshal(res)
 		if err != nil {
