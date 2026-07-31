@@ -2,7 +2,9 @@ package bungee
 
 import "github.com/kernelflowlabs/wallet-sdk/dex"
 
-var RateLimitPublic = dex.RateLimit{QPS: 5, Burst: 5}
+// Public requests share a strict upstream quota. Auto quote can contain several
+// cross-chain candidates, so serialize them instead of sending a burst.
+var RateLimitPublic = dex.RateLimit{QPS: 1, Burst: 1}
 
 type clientConfig struct {
 	rateLimit   dex.RateLimit

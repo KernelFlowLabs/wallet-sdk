@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +17,28 @@ import (
 )
 
 const defaultUserAgent = "wallet-sdk/1.0 (+https://github.com/kernelflowlabs/wallet-sdk)"
+
+// HTTPStatusError preserves non-2xx response metadata so callers can make
+// decisions based on the status without parsing an error string. Preview and
+// URL are intended for diagnostics only and should not be shown to end users.
+type HTTPStatusError struct {
+	StatusCode        int
+	RetryAfterSeconds int
+	URL               string
+	Preview           string
+}
+
+func (e *HTTPStatusError) Error() string {
+	if e == nil {
+		return "unexpected HTTP status"
+	}
+	return fmt.Sprintf(
+		"unexpected status=%d, url=%s, preview=%q",
+		e.StatusCode,
+		e.URL,
+		e.Preview,
+	)
+}
 
 type Request struct {
 	baseUrl    string
@@ -184,8 +207,12 @@ func (r *Request) Execute(ctx context.Context, method string, url string, body i
 		if len(preview) > 200 {
 			preview = preview[:200]
 		}
-		return fmt.Errorf("unexpected status=%d, url=%s, preview=%q",
-			res.StatusCode, url, preview)
+		return &HTTPStatusError{
+			StatusCode:        res.StatusCode,
+			RetryAfterSeconds: retryAfterSeconds(res.Header.Get("Retry-After"), time.Now()),
+			URL:               url,
+			Preview:           preview,
+		}
 	}
 
 	if result == nil || len(bytes.TrimSpace(b)) == 0 {
@@ -202,6 +229,28 @@ func (r *Request) Execute(ctx context.Context, method string, url string, body i
 	}
 
 	return nil
+}
+
+func retryAfterSeconds(value string, now time.Time) int {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	if seconds, err := strconv.Atoi(value); err == nil {
+		if seconds > 0 {
+			return seconds
+		}
+		return 0
+	}
+	retryAt, err := http.ParseTime(value)
+	if err != nil || !retryAt.After(now) {
+		return 0
+	}
+	seconds := int(retryAt.Sub(now) / time.Second)
+	if seconds < 1 {
+		return 1
+	}
+	return seconds
 }
 
 func (r *Request) ExecuteRaw(ctx context.Context, method string, url string, body io.Reader, result *bytes.Buffer) error {

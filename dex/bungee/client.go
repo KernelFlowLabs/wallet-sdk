@@ -1,10 +1,10 @@
 package bungee
 
 import (
-	dexmodel "github.com/kernelflowlabs/wallet-sdk/common/dexmodel"
-	"github.com/kernelflowlabs/wallet-sdk/common/httpc"
 	"context"
 	"fmt"
+	dexmodel "github.com/kernelflowlabs/wallet-sdk/common/dexmodel"
+	"github.com/kernelflowlabs/wallet-sdk/common/httpc"
 	"net/url"
 	"sort"
 	"strings"
@@ -72,7 +72,7 @@ func (c *Client) Quote(ctx context.Context, in *dexmodel.DexQuoteIn) (*dexmodel.
 	out := &QuoteResponse{}
 	err := c.client.Get(ctx, out, path, query)
 	if err != nil {
-		return nil, fmt.Errorf("fail to quote, err=%v", err)
+		return nil, fmt.Errorf("fail to quote, err=%w", err)
 	} else if !out.Success {
 		return nil, fmt.Errorf("fail to quote, statusCode=%d, msg=%s", out.StatusCode, out.Message)
 	}
@@ -104,7 +104,7 @@ func (c *Client) Status(ctx context.Context, in *dexmodel.DexCheckTxIn) (*dexmod
 			out.Status = dexmodel.DexStatusNotFound
 			return out, nil
 		}
-		return nil, fmt.Errorf("fail to get status, quoteId=%s, err=%v", in.Hash, err)
+		return nil, fmt.Errorf("fail to get status, quoteId=%s, err=%w", in.Hash, err)
 	} else if !res.Success {
 		if res.StatusCode == 404 {
 			out.Status = dexmodel.DexStatusNotFound

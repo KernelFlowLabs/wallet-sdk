@@ -2,22 +2,25 @@ package dex
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/kernelflowlabs/wallet-sdk/common/dexmodel"
+	"github.com/kernelflowlabs/wallet-sdk/common/httpc"
 )
 
 const DefaultTimeout = 5 * time.Second
 const ThinLiquidityRatio = 0.05
 
 const (
-	WarnThinLiquidity    = "THIN_LIQUIDITY"
-	WarnPriceImpactHigh  = "PRICE_IMPACT_HIGH"
+	WarnThinLiquidity   = "THIN_LIQUIDITY"
+	WarnPriceImpactHigh = "PRICE_IMPACT_HIGH"
 )
 
 type Candidate struct {
@@ -53,33 +56,53 @@ type Request struct {
 }
 
 type Route struct {
-	Rank            int     `json:"rank"`
-	Recommended     bool    `json:"recommended"`
-	CrossChain      bool    `json:"crossChain"`
-	FromChain       string  `json:"fromChain"`
-	FromToken       string  `json:"fromToken"`
-	ToChain         string  `json:"toChain"`
-	ToToken         string  `json:"toToken"`
-	ToDecimals      int     `json:"toDecimals"`
-	SourceIssuer    string  `json:"sourceIssuer,omitempty"`
-	ToAmount        string  `json:"toAmount"`
-	ToAmountUsd     float64 `json:"toAmountUsd"`
-	ExpectedFillUsd float64 `json:"expectedFillUsd,omitempty"`
-	Channel         string  `json:"channel"`
-	FeeUsd          float64 `json:"feeUsd,omitempty"`
-	PriceImpactPct  float64 `json:"priceImpactPct,omitempty"`
-	LiquidityUsd    float64 `json:"liquidityUsd,omitempty"`
-	EstSeconds      int64   `json:"estSeconds,omitempty"`
+	Rank            int       `json:"rank"`
+	Recommended     bool      `json:"recommended"`
+	CrossChain      bool      `json:"crossChain"`
+	FromChain       string    `json:"fromChain"`
+	FromToken       string    `json:"fromToken"`
+	ToChain         string    `json:"toChain"`
+	ToToken         string    `json:"toToken"`
+	ToDecimals      int       `json:"toDecimals"`
+	SourceIssuer    string    `json:"sourceIssuer,omitempty"`
+	ToAmount        string    `json:"toAmount"`
+	ToAmountUsd     float64   `json:"toAmountUsd"`
+	ExpectedFillUsd float64   `json:"expectedFillUsd,omitempty"`
+	Channel         string    `json:"channel"`
+	FeeUsd          float64   `json:"feeUsd,omitempty"`
+	PriceImpactPct  float64   `json:"priceImpactPct,omitempty"`
+	LiquidityUsd    float64   `json:"liquidityUsd,omitempty"`
+	EstSeconds      int64     `json:"estSeconds,omitempty"`
 	Warnings        []Warning `json:"warnings,omitempty"`
-	Reason          string  `json:"reason,omitempty"`
+	Reason          string    `json:"reason,omitempty"`
 }
 
 type Warning = dexmodel.DexWarning
 
+const (
+	FailureRateLimited = "RATE_LIMITED"
+	FailureTimeout     = "TIMEOUT"
+	FailureProvider    = "PROVIDER_ERROR"
+	FailureNoRoute     = "NO_ROUTE"
+)
+
+// CandidateFailure records why one requested target has no route. It
+// intentionally excludes the provider/channel name so SDK consumers do not
+// accidentally expose infrastructure brands in user-facing messages.
+type CandidateFailure struct {
+	FromChain         string `json:"fromChain"`
+	ToChain           string `json:"toChain"`
+	ToToken           string `json:"toToken"`
+	SourceIssuer      string `json:"sourceIssuer,omitempty"`
+	Code              string `json:"code"`
+	RetryAfterSeconds int    `json:"retryAfterSeconds,omitempty"`
+}
+
 type Response struct {
-	Routes        []*Route `json:"routes"`
-	Reason        string   `json:"reason,omitempty"`
-	ReasonMessage string   `json:"reasonMessage,omitempty"`
+	Routes        []*Route            `json:"routes"`
+	Failures      []*CandidateFailure `json:"failures,omitempty"`
+	Reason        string              `json:"reason,omitempty"`
+	ReasonMessage string              `json:"reasonMessage,omitempty"`
 }
 
 type QuoteFn func(ctx context.Context, cand *Candidate, in *dexmodel.DexQuoteIn) (*dexmodel.DexQuoteOut, error)
@@ -92,7 +115,10 @@ func (e *Engine) Quote(ctx context.Context, req *Request, cands []*Candidate, qu
 	if req == nil || quote == nil {
 		return &Response{Reason: "INVALID_REQUEST"}
 	}
-	resp := &Response{Routes: []*Route{}}
+	resp := &Response{
+		Routes:   []*Route{},
+		Failures: []*CandidateFailure{},
+	}
 	if len(cands) == 0 {
 		resp.Reason = "NO_CANDIDATE"
 		return resp
@@ -154,8 +180,27 @@ func (e *Engine) Quote(ctx context.Context, req *Request, cands []*Candidate, qu
 	wg.Wait()
 
 	out := make([]*Route, 0, len(results))
+	providerErrors := 0
+	emptyResponses := 0
+	timedOut := false
+	rateLimited := false
 	for _, r := range results {
-		if r.err != nil || r.out == nil || len(r.out.Routes) == 0 {
+		if r.err != nil {
+			providerErrors++
+			code, retryAfter := classifyQuoteFailure(r.err)
+			timedOut = timedOut || code == FailureTimeout
+			rateLimited = rateLimited || code == FailureRateLimited
+			resp.Failures = append(resp.Failures, candidateFailure(r.cand, code, retryAfter))
+			continue
+		}
+		if r.out == nil {
+			providerErrors++
+			resp.Failures = append(resp.Failures, candidateFailure(r.cand, FailureProvider, 0))
+			continue
+		}
+		if len(r.out.Routes) == 0 {
+			emptyResponses++
+			resp.Failures = append(resp.Failures, candidateFailure(r.cand, FailureNoRoute, 0))
 			continue
 		}
 		best := r.out.Routes[0]
@@ -227,10 +272,60 @@ func (e *Engine) Quote(ctx context.Context, req *Request, cands []*Candidate, qu
 
 	resp.Routes = out
 	if len(out) == 0 {
-		resp.Reason = "NO_LIQUIDITY_AT_SIZE"
-		resp.ReasonMessage = "no route filled at this amount — try a smaller size"
+		switch {
+		case errors.Is(qctx.Err(), context.DeadlineExceeded) || timedOut:
+			resp.Reason = "QUOTE_TIMEOUT"
+			resp.ReasonMessage = "quote request timed out — try again"
+		case rateLimited:
+			resp.Reason = "QUOTE_RATE_LIMITED"
+			resp.ReasonMessage = "quote provider is busy — wait a moment and try again"
+		case providerErrors > 0:
+			resp.Reason = "QUOTE_PROVIDER_ERROR"
+			resp.ReasonMessage = "quote provider could not complete the request — try again"
+		case emptyResponses > 0:
+			resp.Reason = "NO_ROUTE_AVAILABLE"
+			resp.ReasonMessage = "no route is available for this pair at the moment"
+		default:
+			resp.Reason = "NO_ROUTE_AVAILABLE"
+			resp.ReasonMessage = "no route is available at the moment"
+		}
 	}
 	return resp
+}
+
+func candidateFailure(c *Candidate, code string, retryAfterSeconds int) *CandidateFailure {
+	failure := &CandidateFailure{
+		Code:              code,
+		RetryAfterSeconds: retryAfterSeconds,
+	}
+	if c != nil {
+		failure.FromChain = c.FromChain
+		failure.ToChain = c.ToChain
+		failure.ToToken = c.ToToken
+		failure.SourceIssuer = c.SourceIssuer
+	}
+	return failure
+}
+
+func classifyQuoteFailure(err error) (code string, retryAfterSeconds int) {
+	if err == nil {
+		return FailureProvider, 0
+	}
+	var statusErr *httpc.HTTPStatusError
+	if errors.As(err, &statusErr) && statusErr.StatusCode == 429 {
+		return FailureRateLimited, statusErr.RetryAfterSeconds
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return FailureTimeout, 0
+	}
+	errText := strings.ToLower(err.Error())
+	if strings.Contains(errText, "rate limit") ||
+		strings.Contains(errText, "status=429") ||
+		strings.Contains(errText, "statuscode=429") ||
+		strings.Contains(errText, "error code: 1015") {
+		return FailureRateLimited, 0
+	}
+	return FailureProvider, 0
 }
 
 func IsRouteUnsafe(r *Route) bool {
