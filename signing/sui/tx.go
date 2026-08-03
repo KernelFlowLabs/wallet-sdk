@@ -64,6 +64,8 @@ func (tx *TxBuilder) Build() error {
 			return fmt.Errorf("tx.Ingredient.Sender is empty")
 		} else if tx.Ingredient.Recipient == "" {
 			return fmt.Errorf("tx.Ingredient.Recipient is empty")
+		} else if tx.Ingredient.Recipient == signing.MagicContactAddressForNative {
+			return fmt.Errorf("recipient must not be the native asset sentinel")
 		} else if tx.Ingredient.Amount == "" {
 			return fmt.Errorf("tx.Ingredient.Amount is empty")
 		}

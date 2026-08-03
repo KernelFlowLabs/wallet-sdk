@@ -50,6 +50,8 @@ func (tx *TxBuilder) Build() error {
 	if tx == nil {
 		return fmt.Errorf("tx == nil")
 	}
+	tx.sigHash = nil
+	tx.txHash = ""
 	if err := signing.Validator.Struct(tx.Ingredient); err != nil {
 		return fmt.Errorf("invalid ingredient: %v", err)
 	}

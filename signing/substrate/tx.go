@@ -25,6 +25,9 @@ func (tx *TxBuilder) Build() error {
 	if tx.Ingredient.ContractAddress != signing.MagicContactAddressForNative {
 		return fmt.Errorf("only basecoin supported on this chain")
 	}
+	if !ValidAddress(tx.Ingredient.Recipient, tx.network) {
+		return fmt.Errorf("invalid recipient address")
+	}
 	recipientPub := convert2PublicKey(tx.Ingredient.Recipient)
 	if len(recipientPub) != 32 {
 		return fmt.Errorf("invalid recipient address")

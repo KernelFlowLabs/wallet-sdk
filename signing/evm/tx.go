@@ -26,6 +26,9 @@ func (tx *TxBuilder) Build() error {
 	if tx == nil {
 		return fmt.Errorf("tx == nil")
 	}
+	tx.sigHash = nil
+	tx.unsignedHex = ""
+	tx.txHash = ""
 	if err := signing.Validator.Struct(tx.Ingredient); err != nil {
 		return fmt.Errorf("invalid ingredient: %v", err)
 	}
@@ -42,6 +45,9 @@ func (tx *TxBuilder) Build() error {
 	case signing.TxTypeTransfer:
 		if tx.Ingredient.Recipient == "" {
 			return fmt.Errorf("empty Recipient")
+		}
+		if strings.EqualFold(tx.Ingredient.Recipient, signing.MagicContactAddressForNative) {
+			return fmt.Errorf("recipient must not be the native asset sentinel")
 		}
 		if strings.EqualFold(tx.Ingredient.ContractAddress, signing.MagicContactAddressForNative) {
 			value, ok = big.NewInt(0).SetString(tx.Ingredient.Amount, 10)
@@ -121,6 +127,19 @@ func (tx *TxBuilder) Sign(privateKey []byte) (string, error) {
 		return "", fmt.Errorf("tx == nil")
 	} else if len(tx.sigHash) != 1 {
 		return "", fmt.Errorf("len(tx.SigHash) != 1, =%d", len(tx.sigHash))
+	}
+	if tx.Ingredient != nil && tx.Ingredient.Sender != "" {
+		pub, err := key.PrivateKey2PublicKeyECDSA(privateKey)
+		if err != nil {
+			return "", fmt.Errorf("failed to derive public key, err=%v", err)
+		}
+		signer, err := PublicKey2Address(pub)
+		if err != nil {
+			return "", fmt.Errorf("failed to derive signer address, err=%v", err)
+		}
+		if !strings.EqualFold(signer, tx.Ingredient.Sender) {
+			return "", fmt.Errorf("private key does not match sender %s", tx.Ingredient.Sender)
+		}
 	}
 	sigHash, err := hex.DecodeString(tx.sigHash[0])
 	if err != nil {

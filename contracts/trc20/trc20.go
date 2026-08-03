@@ -51,12 +51,25 @@ func PackPayloadForTrc20(function string, params []byte) (string, error) {
 
 	pp := &callTrc20NativeIn{}
 	{
-		pp.Address = common.HexToAddress(ConvertToHex(p.Address))
-		pp.Owner = common.HexToAddress(ConvertToHex(p.Owner))
-		pp.Spender = common.HexToAddress(ConvertToHex(p.Spender))
-		pp.From = common.HexToAddress(ConvertToHex(p.From))
-		pp.To = common.HexToAddress(ConvertToHex(p.To))
-		pp.Recipient = common.HexToAddress(ConvertToHex(p.Recipient))
+		var err error
+		if pp.Address, err = toAddress(p.Address); err != nil {
+			return "", err
+		}
+		if pp.Owner, err = toAddress(p.Owner); err != nil {
+			return "", err
+		}
+		if pp.Spender, err = toAddress(p.Spender); err != nil {
+			return "", err
+		}
+		if pp.From, err = toAddress(p.From); err != nil {
+			return "", err
+		}
+		if pp.To, err = toAddress(p.To); err != nil {
+			return "", err
+		}
+		if pp.Recipient, err = toAddress(p.Recipient); err != nil {
+			return "", err
+		}
 		if p.Amount != "" {
 			amount, ok := big.NewInt(0).SetString(p.Amount, 10)
 			if !ok {

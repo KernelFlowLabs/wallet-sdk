@@ -29,6 +29,9 @@ func (tx *TxBuilder) Build() error {
 	if err != nil {
 		return fmt.Errorf("failed to parse sender %s, err=%v", tx.Ingredient.Sender, err)
 	}
+	if tx.Ingredient.Recipient == signing.MagicContactAddressForNative {
+		return fmt.Errorf("recipient must not be the native asset sentinel")
+	}
 	recipient, err := parseHexAddress(tx.Ingredient.Recipient)
 	if err != nil {
 		return fmt.Errorf("failed to parse recipient %s, err=%v", tx.Ingredient.Recipient, err)

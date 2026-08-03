@@ -2,9 +2,10 @@ package trc20
 
 import (
 	"encoding/hex"
-	"math/big"
+	"fmt"
 
 	"github.com/btcsuite/btcd/btcutil/base58"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 func ConvertToBytes(address string) []byte {
@@ -12,20 +13,27 @@ func ConvertToBytes(address string) []byte {
 	if err != nil {
 		return nil
 	}
+	if version != 0x41 || len(result) != 20 {
+		return nil
+	}
 	return append([]byte{version}, result...)
 }
 
-func ConvertToHex(address string) string {
+func ConvertToHex(address string) (string, error) {
 	payload := ConvertToBytes(address)
 	if payload == nil {
-		return ""
+		return "", fmt.Errorf("invalid tron address %q", address)
 	}
-	if payload[0] == 0 {
-		return new(big.Int).SetBytes(payload).String()
+	return hex.EncodeToString(payload[1:]), nil
+}
+
+func toAddress(address string) (common.Address, error) {
+	if address == "" {
+		return common.Address{}, nil
 	}
-	h := hex.EncodeToString(payload)
-	if h == "" {
-		h = "0"
+	h, err := ConvertToHex(address)
+	if err != nil {
+		return common.Address{}, err
 	}
-	return h
+	return common.HexToAddress(h), nil
 }

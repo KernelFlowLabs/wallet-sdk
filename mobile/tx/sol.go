@@ -12,7 +12,6 @@ type SolTxBuilder struct {
 	err    error
 	fee    string
 	feeSet bool
-	built  bool
 }
 
 func NewSolTxBuilder() *SolTxBuilder {
@@ -82,20 +81,13 @@ func (b *SolTxBuilder) Build() error {
 	if b.err != nil {
 		return b.err
 	}
-	if b.built {
-		return nil
-	}
 	if b.feeSet {
 		isToken := !solana.IsNativeSentinel(b.in.Ingredient.ContractAddress)
 		unitPrice, unitLimit := solana.RecommendComputeBudget(b.fee, isToken)
 		b.in.Ingredient.UnitPrice = unitPrice
 		b.in.Ingredient.UnitLimit = unitLimit
 	}
-	if err := b.in.Build(); err != nil {
-		return err
-	}
-	b.built = true
-	return nil
+	return b.in.Build()
 }
 
 func (b *SolTxBuilder) SigHash() string {

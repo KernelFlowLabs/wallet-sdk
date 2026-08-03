@@ -37,17 +37,11 @@ func ValidAddress(address string) bool {
 	if len(address) != 34 || address[0] != 'T' {
 		return false
 	}
-	for _, c := range address[1:] {
-		if !((c >= '1' && c <= '9') ||
-			(c >= 'A' && c <= 'H') ||
-			(c >= 'J' && c <= 'N') ||
-			(c >= 'P' && c <= 'Z') ||
-			(c >= 'a' && c <= 'k') ||
-			(c >= 'm' && c <= 'z')) {
-			return false
-		}
+	result, version, err := base58.CheckDecode(address)
+	if err != nil {
+		return false
 	}
-	return true
+	return version == 0x41 && len(result) == 20
 }
 
 func ConvertToBytes(address string) []byte {
