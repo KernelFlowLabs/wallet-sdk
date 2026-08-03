@@ -82,8 +82,14 @@ func (tx *TxBuilder) Build() error {
 			instructions = append(instructions, instructionAdvanceNonceAccount)
 		}
 		if tx.Ingredient.UnitPrice != "" && tx.Ingredient.UnitLimit != "" {
-			unitPrice, _ := strconv.ParseUint(tx.Ingredient.UnitPrice, 10, 64)
-			unitLimit, _ := strconv.ParseUint(tx.Ingredient.UnitLimit, 10, 64)
+			unitPrice, err := strconv.ParseUint(tx.Ingredient.UnitPrice, 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid unitPrice %q: %v", tx.Ingredient.UnitPrice, err)
+			}
+			unitLimit, err := strconv.ParseUint(tx.Ingredient.UnitLimit, 10, 32)
+			if err != nil {
+				return fmt.Errorf("invalid unitLimit %q: %v", tx.Ingredient.UnitLimit, err)
+			}
 			instructionUnitPrice := compute_budget.SetComputeUnitPrice(compute_budget.SetComputeUnitPriceParam{
 				MicroLamports: unitPrice,
 			})
@@ -104,11 +110,14 @@ func (tx *TxBuilder) Build() error {
 			if tx.Ingredient.Amount == "" {
 				return fmt.Errorf("amount required")
 			}
-			if !ValidAddress(tx.Ingredient.Recipient) {
+			if !ValidStrictAddress(tx.Ingredient.Recipient) {
 				return fmt.Errorf("invalid recipient")
 			}
 			recipientPubkey := common.PublicKeyFromString(tx.Ingredient.Recipient)
-			amount, _ := strconv.ParseUint(tx.Ingredient.Amount, 10, 64)
+			amount, err := strconv.ParseUint(tx.Ingredient.Amount, 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid amount %q: %v", tx.Ingredient.Amount, err)
+			}
 			if IsNativeSentinel(tx.ContractAddress) {
 				instructionTransfer := sysprog.Transfer(sysprog.TransferParam{
 					From:   senderPubkey,
@@ -147,7 +156,6 @@ func (tx *TxBuilder) Build() error {
 							Mint:                   contractPubkey,
 							AssociatedTokenAccount: recipientTokenPubkey,
 						})
-					// ATA-create carries the token program as an account; retarget for Token-2022.
 					for i := range instructionCreateAssociatedTokenAccount.Accounts {
 						if instructionCreateAssociatedTokenAccount.Accounts[i].PubKey == common.TokenProgramID {
 							instructionCreateAssociatedTokenAccount.Accounts[i].PubKey = TokenProgramOf(is2022)
@@ -324,9 +332,7 @@ type (
 )
 
 func RecommendComputeBudget(maxFeeStr string, isToken bool) (string, string) {
-	var maxFee uint64 = 0
-	var err error
-	maxFee, err = strconv.ParseUint(maxFeeStr, 10, 64)
+	maxFee, err := strconv.ParseUint(maxFeeStr, 10, 64)
 	if err != nil {
 		return "100", "250000"
 	}

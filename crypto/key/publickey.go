@@ -13,7 +13,10 @@ func PrivateKey2PublicKeyECDSA(privateKey []byte) ([]byte, error) {
 }
 
 func PrivateKey2PublicKeyED25519(privateKey []byte) ([]byte, error) {
-	sk := ed25519.NewKeyFromSeed(privateKey)
+	sk, err := ed25519PrivateKey(privateKey)
+	if err != nil {
+		return nil, err
+	}
 	publicKey := sk.Public().(ed25519.PublicKey)
 	return publicKey, nil
 }

@@ -79,8 +79,6 @@ type (
 			TokenAddress   string `json:"tokenAddress"`
 			UserAddress    string `json:"userAddress"`
 		} `json:"approval"`
-		// Object is kind-dependent: "evm_tx" carries {chainId,to,data,
-		// value}; "svm_instructions" carries Solana tx ingredients.
 		TxData struct {
 			Kind   string          `json:"kind"`
 			Object json.RawMessage `json:"object"`
@@ -105,8 +103,6 @@ type (
 		Data    string     `json:"data"`
 		Value   flexString `json:"value"`
 	}
-	// flexString tolerates Socket V3's mixed typing: the same field is
-	// a JSON string on some routes and a bare number on others.
 	flexString string
 	StatusResponse struct {
 		Success    bool      `json:"success"`
@@ -221,7 +217,6 @@ func (c *Client) toStandardQuoteRes(res *QuoteOut) *dexmodel.DexQuoteOut {
 				}
 			}
 		default:
-			// Non-EVM kinds pass the object through raw; FE keys off UserOp.
 			if len(rt.TxData.Object) > 0 {
 				route.TxData = &dexmodel.DexTx{Data: string(rt.TxData.Object)}
 				route.UserOp = rt.TxData.Kind
@@ -243,7 +238,7 @@ func (c *Client) toStandardQuoteRes(res *QuoteOut) *dexmodel.DexQuoteOut {
 var idChainMapper = map[string]string{
 	"1":          "ETH",
 	"56":         "BNB",
-	"89999":      "SOL", // Socket's pseudo-chainId for Solana (Mayan bridge)
+	"89999":      "SOL",
 	"137":        "POLYGON",
 	"43114":      "AVAXC",
 	"42161":      "ARB",

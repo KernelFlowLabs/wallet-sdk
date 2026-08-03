@@ -46,7 +46,7 @@ func (a *UtxoAccount) Address() string {
 }
 
 func PrivateKeyHexToWIF(privateKey string) (string, error) {
-	return utxo.PrivateKeyWIFToHex(privateKey)
+	return utxo.PrivateKeyHexToWIF(privateKey)
 }
 
 func PrivateKeyWIFToHex(privateKey string) (string, error) {

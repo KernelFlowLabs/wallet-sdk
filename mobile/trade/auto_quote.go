@@ -40,6 +40,16 @@ func autoQuoteLiFi() *lifi.Client {
 }
 
 func serverProxy() *httpc.Request {
+	tradeMu.RLock()
+	if proxy != nil || server == "" {
+		p := proxy
+		tradeMu.RUnlock()
+		return p
+	}
+	tradeMu.RUnlock()
+
+	tradeMu.Lock()
+	defer tradeMu.Unlock()
 	if proxy == nil && server != "" {
 		proxy = httpc.NewRequest(server, nil)
 	}
@@ -116,10 +126,11 @@ func dispatch(ctx context.Context, cand *dex.Candidate, in *dexmodel.DexQuoteIn)
 	}
 	switch cand.Channel {
 	case "jupiter":
-		if jup == nil {
+		j := jupClient()
+		if j == nil {
 			return nil, fmt.Errorf("jupiter not initialized — call Init")
 		}
-		return jup.Quote(ctx, in)
+		return j.Quote(ctx, in)
 	case "bungee":
 		return autoQuoteBungee().Quote(ctx, in)
 	case "lifi":

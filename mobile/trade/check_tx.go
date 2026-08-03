@@ -60,10 +60,11 @@ func CheckTx(reqJSON string) string {
 	var err error
 	switch req.Channel {
 	case "jupiter":
-		if jup == nil {
+		j := jupClient()
+		if j == nil {
 			return marshal(&checkTxResp{Error: "jupiter not initialized — call Init"})
 		}
-		out, err = jup.Status(ctx, in)
+		out, err = j.Status(ctx, in)
 	case "bungee":
 		out, err = autoQuoteBungee().Status(ctx, in)
 	case "lifi":

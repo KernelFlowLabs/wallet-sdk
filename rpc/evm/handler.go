@@ -138,15 +138,26 @@ func (h *Handler) GetTransfersByHash(ctx context.Context, hash string, confirmat
 		return result, nil
 	}
 
-	height, _ := strconv.ParseUint(txResult.Height, 10, 64)
-	latestHeightStr, _ := h.GetHeight(ctx)
-	latestHeight, _ := strconv.ParseUint(latestHeightStr, 10, 64)
-	if height != 0 && latestHeight != 0 {
-		if latestHeight-height < confirmation {
-			result.ErrMsg = fmt.Sprintf("tx succeeded. But current confirmation number %d hasn't meet "+
-				"expected number %d", latestHeight-height, confirmation)
-			return result, nil
-		}
+	height, err := strconv.ParseUint(txResult.Height, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse tx height %q: %v", txResult.Height, err)
+	}
+	latestHeightStr, err := h.GetHeight(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to GetHeight, err=%v", err)
+	}
+	latestHeight, err := strconv.ParseUint(latestHeightStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse latest height %q: %v", latestHeightStr, err)
+	}
+	var confirmed uint64
+	if latestHeight >= height {
+		confirmed = latestHeight - height
+	}
+	if confirmed < confirmation {
+		result.ErrMsg = fmt.Sprintf("tx succeeded. But current confirmation number %d hasn't meet "+
+			"expected number %d", confirmed, confirmation)
+		return result, nil
 	}
 
 	tx := &RpcTransaction{}
@@ -340,9 +351,12 @@ func (h *Handler) InquireChain(ctx context.Context, instruction, params string) 
 		}
 		return gasPrice.String(), nil
 	case "getGasBaseFee":
-		header, err := h.client.HeaderByNumber(context.Background(), nil)
+		header, err := h.client.HeaderByNumber(ctx, nil)
 		if err != nil {
 			return "", fmt.Errorf("failed to HeaderByNumber, err=%v", err)
+		}
+		if header.BaseFee == nil {
+			return "0", nil
 		}
 		return header.BaseFee.String(), nil
 	case "getGasTipCap":
@@ -406,6 +420,9 @@ func (h *Handler) InquireChain(ctx context.Context, instruction, params string) 
 			}
 			logs = append(logs, log)
 		}
+		if len(logs) == 0 {
+			return "", nil
+		}
 		var res string
 		for _, v := range logs {
 			res += "_" + v.String()
@@ -463,6 +480,9 @@ func (h *Handler) InquireChain(ctx context.Context, instruction, params string) 
 			}
 			logs = append(logs, log)
 		}
+		if len(logs) == 0 {
+			return "", nil
+		}
 		var res string
 		for _, v := range logs {
 			res += "_" + v.String()
@@ -507,7 +527,10 @@ func (h *Handler) InquireChain(ctx context.Context, instruction, params string) 
 	case "IsTxExisted":
 		tx := &RpcTransaction{}
 		err := h.rpc.CallContext(ctx, tx, "eth_getTransactionByHash", params)
-		if err == nil && tx != nil && tx.Hash != "" {
+		if err != nil {
+			return "", fmt.Errorf("failed to eth_getTransactionByHash, err=%v", err)
+		}
+		if tx != nil && tx.Hash != "" {
 			return "true", nil
 		}
 		return "false", nil
@@ -640,9 +663,9 @@ func (h *Handler) isContractAddress(ctx context.Context, address string) (bool, 
 }
 
 func (h *Handler) getTxTransferForEVMFromNative(tx *RpcTransaction) ([]*chainrpc.Transfer, []*chainrpc.BalanceChange, error) {
-	valueBig, ok := new(big.Int).SetString(tx.Value[2:], 16)
+	valueBig, ok := new(big.Int).SetString(strings.TrimPrefix(tx.Value, "0x"), 16)
 	if !ok {
-		return nil, nil, fmt.Errorf("failed to SetString")
+		return nil, nil, fmt.Errorf("failed to parse tx value %q", tx.Value)
 	}
 	memoBytes, err := hex.DecodeString(strings.TrimPrefix(tx.Payload, "0x"))
 	if err != nil {

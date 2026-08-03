@@ -95,7 +95,7 @@ func (c *Client) Quote(ctx context.Context, in *dexmodel.DexQuoteIn) (*dexmodel.
 
 	err := c.client.Get(ctx, out, path, query)
 	if err != nil {
-		return nil, fmt.Errorf("fail to get quote, from=%s, to=%s, err=%v",
+		return nil, fmt.Errorf("fail to get quote, from=%s, to=%s, err=%w",
 			in.FromChain, in.ToChain, err)
 	}
 	res := c.toStandardQuoteRes(out)
@@ -123,7 +123,7 @@ func (c *Client) Status(ctx context.Context, in *dexmodel.DexCheckTxIn) (*dexmod
 	out := &StatusRes{}
 	err := c.client.Get(ctx, out, path, query)
 	if err != nil {
-		return nil, fmt.Errorf("fail to get status, txHash=%s, err=%v", in.Hash, err)
+		return nil, fmt.Errorf("fail to get status, txHash=%s, err=%w", in.Hash, err)
 	}
 	res := c.toStandardStatusRes(out)
 	if res == nil {

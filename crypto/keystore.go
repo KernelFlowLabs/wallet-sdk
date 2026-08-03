@@ -202,36 +202,54 @@ func ReadFromKeyStore(ksString, password string, isMn bool) (string, error) {
 }
 
 func ReadFromGethKeyStore(ksString string, password string) (string, error) {
-	scryptN := 262144
-	scryptP := 1
-	scryptR := 8
-	dkLen := 32
-
 	ks := &GethKeyStore{}
-	err := json.Unmarshal([]byte(ksString), ks)
-	if err != nil {
+	if err := json.Unmarshal([]byte(ksString), ks); err != nil {
 		return "", err
+	}
+	if ks.Crypto.Kdf != "scrypt" {
+		return "", fmt.Errorf("unsupported kdf: %s", ks.Crypto.Kdf)
+	}
+	if ks.Crypto.Cipher != "aes-128-ctr" {
+		return "", fmt.Errorf("unsupported cipher: %s", ks.Crypto.Cipher)
+	}
+	dkLen := ks.Crypto.Kdfparams.Dklen
+	if dkLen != 32 {
+		return "", fmt.Errorf("unsupported dklen: %d", dkLen)
 	}
 
 	salt, err := hex.DecodeString(ks.Crypto.Kdfparams.Salt)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("invalid salt: %w", err)
 	}
-	derivedKey, err := scrypt.Key([]byte(password), salt, scryptN, scryptR, scryptP, dkLen)
+	derivedKey, err := scrypt.Key([]byte(password), salt,
+		ks.Crypto.Kdfparams.N, ks.Crypto.Kdfparams.R, ks.Crypto.Kdfparams.P, dkLen)
 	if err != nil {
 		return "", err
 	}
-	encryptKey := derivedKey[:16]
+	defer func() {
+		for i := range derivedKey {
+			derivedKey[i] = 0
+		}
+	}()
+
+	ciphertext, err := hex.DecodeString(ks.Crypto.Ciphertext)
+	if err != nil {
+		return "", fmt.Errorf("invalid ciphertext: %w", err)
+	}
+	expectedMAC, err := hex.DecodeString(ks.Crypto.Mac)
+	if err != nil {
+		return "", fmt.Errorf("invalid mac: %w", err)
+	}
+	computedMAC := crypto.Keccak256(derivedKey[16:32], ciphertext)
+	if subtle.ConstantTimeCompare(computedMAC, expectedMAC) != 1 {
+		return "", fmt.Errorf("invalid password or corrupted keystore (MAC mismatch)")
+	}
 
 	iv, err := hex.DecodeString(ks.Crypto.Cipherparams.Iv)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("invalid iv: %w", err)
 	}
-	ciphertext, err := hex.DecodeString(ks.Crypto.Ciphertext)
-	if err != nil {
-		return "", err
-	}
-	clearText, err := AesDecryptCTR(ciphertext, encryptKey, iv)
+	clearText, err := AesDecryptCTR(ciphertext, derivedKey[:16], iv)
 	if err != nil {
 		return "", err
 	}

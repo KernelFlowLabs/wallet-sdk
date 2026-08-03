@@ -43,7 +43,7 @@ func (tx *TxBuilder) Build() error {
 		if tx.Ingredient.Recipient == "" {
 			return fmt.Errorf("empty Recipient")
 		}
-		if tx.Ingredient.ContractAddress == signing.MagicContactAddressForNative {
+		if strings.EqualFold(tx.Ingredient.ContractAddress, signing.MagicContactAddressForNative) {
 			value, ok = big.NewInt(0).SetString(tx.Ingredient.Amount, 10)
 			if !ok {
 				return fmt.Errorf("failed to SetString for Amount")

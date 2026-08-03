@@ -10,8 +10,6 @@ import (
 	"strings"
 )
 
-// Client speaks the Socket Swap V3 API (the successor of Bungee v1;
-// V3 is tx-mode only — no intent submit step, routes carry txData).
 type Client struct {
 	client *httpc.Request
 }
@@ -21,7 +19,6 @@ func NewClient(opts ...ClientOption) *Client {
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	// Keyed access goes through the dedicated backend.
 	base := "https://public-backend.socket.tech"
 	if cfg.apiKey != "" {
 		base = "https://dedicated-backend.socket.tech"
@@ -38,8 +35,6 @@ func NewClient(opts ...ClientOption) *Client {
 	return &Client{client: c}
 }
 
-// GetSupportedChainIds returns the SDK's static chain map; Socket V3
-// has no supported-chains endpoint.
 func (c *Client) GetSupportedChainIds(ctx context.Context) ([]string, error) {
 	ids := make([]string, 0, len(idChainMapper))
 	for id := range idChainMapper {
@@ -83,7 +78,6 @@ func (c *Client) Quote(ctx context.Context, in *dexmodel.DexQuoteIn) (*dexmodel.
 	return res, nil
 }
 
-// Status polls /v3/swap/status; in.Hash must carry the route quoteId.
 func (c *Client) Status(ctx context.Context, in *dexmodel.DexCheckTxIn) (*dexmodel.DexCheckTxOut, error) {
 	if in == nil {
 		return nil, fmt.Errorf("in is nil")
@@ -99,7 +93,6 @@ func (c *Client) Status(ctx context.Context, in *dexmodel.DexCheckTxIn) (*dexmod
 	res := &StatusResponse{}
 	err := c.client.Get(ctx, res, path, query)
 	if err != nil {
-		// Unknown quoteId is an HTTP 404 — not-found, not an error.
 		if strings.Contains(err.Error(), "status=404") {
 			out.Status = dexmodel.DexStatusNotFound
 			return out, nil
@@ -129,7 +122,6 @@ func (c *Client) Status(ctx context.Context, in *dexmodel.DexCheckTxIn) (*dexmod
 	case "FAILED", "EXPIRED":
 		out.Status = dexmodel.DexStatusFailed
 	default:
-		// PENDING / IN_PROGRESS and anything new keep polling.
 		out.Status = dexmodel.DexStatusPending
 	}
 	return out, nil

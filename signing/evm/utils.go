@@ -39,6 +39,12 @@ func RecoverAddress(data, signature []byte) (string, error) {
 		return "", fmt.Errorf("invalid signature length: %d", len(signature))
 	}
 
+	if signature[64] >= 27 {
+		sig := make([]byte, 65)
+		copy(sig, signature)
+		sig[64] -= 27
+		signature = sig
+	}
 	pubKey, err := crypto.SigToPub(data, signature)
 	if err != nil {
 		return "", fmt.Errorf("recover public key: %w", err)

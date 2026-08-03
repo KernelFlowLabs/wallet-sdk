@@ -295,19 +295,6 @@ func (c *Client) Quote(ctx context.Context, in *dexmodel.DexQuoteIn) (*dexmodel.
 	return res, nil
 }
 
-// isTransientJupiterErr flags the specific error signatures Jupiter's
-// backend returns *inconsistently* across its edge nodes — the same
-// (mint, params) pair can 400 with TOKEN_NOT_TRADABLE or MARKET_NOT_FOUND
-// from one node and 200 with a healthy quote from the next call
-// milliseconds later. Confirmed in prod on 2026-07-16 with JNJx
-// (XsGVi5eo...): 3 calls in 10s produced ok / MARKET_NOT_FOUND /
-// TOKEN_NOT_TRADABLE in random order.
-//
-// Retrying the same request through Jupiter's LB usually hits a healthy
-// node within 1-2 attempts. Retry is only worthwhile for these — genuine
-// tradability blocks (persistent 400) still fail after retry, so the
-// user-visible error is delayed by 400ms in the true-block case, no
-// worse than that.
 func isTransientJupiterErr(err error) bool {
 	if err == nil {
 		return false
@@ -404,7 +391,7 @@ func (c *Client) Status(ctx context.Context, in *dexmodel.DexCheckTxIn) (*dexmod
 
 	out := &SignatureStatusRes{}
 	if err := c.rpc.Post(ctx, out, "", body); err != nil {
-		return nil, fmt.Errorf("fail to get status, txHash=%s, err=%v", in.Hash, err)
+		return nil, fmt.Errorf("fail to get status, txHash=%s, err=%w", in.Hash, err)
 	} else if out.Error != nil {
 		return nil, fmt.Errorf("fail to get status, code=%d, msg=%s", out.Error.Code, out.Error.Message)
 	}
@@ -427,7 +414,7 @@ func (c *Client) fetchQuote(ctx context.Context, req *QuoteReq) (*QuoteRes, erro
 	out := &QuoteRes{}
 	err := c.client.Get(ctx, out, path, query)
 	if err != nil {
-		return nil, fmt.Errorf("fail to get quote, err=%v", err)
+		return nil, fmt.Errorf("fail to get quote, err=%w", err)
 	} else if out.ErrorCode != "" || out.ErrorMsg != "" {
 		return nil, fmt.Errorf("fail to get quote, code=%s, msg=%s", out.ErrorCode, out.ErrorMsg)
 	}

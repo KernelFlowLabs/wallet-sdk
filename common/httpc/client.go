@@ -78,11 +78,11 @@ func (r *Request) SetRateLimit(qps float64, burst int) {
 }
 
 func (r *Request) SetHeader(k, v string) {
+	r.headerLock.Lock()
+	defer r.headerLock.Unlock()
 	if r.headers == nil {
 		r.headers = make(map[string]string)
 	}
-	r.headerLock.Lock()
-	defer r.headerLock.Unlock()
 	r.headers[k] = v
 }
 
@@ -215,8 +215,14 @@ func (r *Request) Execute(ctx context.Context, method string, url string, body i
 		}
 	}
 
-	if result == nil || len(bytes.TrimSpace(b)) == 0 {
+	if result == nil {
 		return nil
+	}
+	if len(bytes.TrimSpace(b)) == 0 {
+		if res.StatusCode == http.StatusNoContent {
+			return nil
+		}
+		return fmt.Errorf("empty response body, status=%d, url=%s", res.StatusCode, url)
 	}
 
 	if err := json.Unmarshal(b, result); err != nil {
@@ -282,6 +288,22 @@ func (r *Request) ExecuteRaw(ctx context.Context, method string, url string, bod
 	}
 	defer res.Body.Close()
 
-	_, err = io.Copy(result, res.Body)
-	return err
+	if _, err = io.Copy(result, res.Body); err != nil {
+		return err
+	}
+	switch res.StatusCode {
+	case http.StatusOK, http.StatusAccepted, http.StatusCreated, http.StatusNoContent:
+		return nil
+	default:
+		preview := result.String()
+		if len(preview) > 200 {
+			preview = preview[:200]
+		}
+		return &HTTPStatusError{
+			StatusCode:        res.StatusCode,
+			RetryAfterSeconds: retryAfterSeconds(res.Header.Get("Retry-After"), time.Now()),
+			URL:               url,
+			Preview:           preview,
+		}
+	}
 }

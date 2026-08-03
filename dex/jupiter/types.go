@@ -424,9 +424,6 @@ func (c *Client) toStandardQuoteRes(quote *QuoteRes, swap *SwapRes) *dexmodel.De
 	slippage, _ := decimal.NewFromInt(int64(quote.SlippageBps)).Shift(-2).Float64()
 
 	feeUsd := ""
-	if quote.PlatformFee != nil {
-		feeUsd = quote.PlatformFee.Amount
-	}
 
 	// Jupiter emits priceImpactPct as a string ("0.0015" = 0.15%).
 	// Empty / unparsable → 0 (treated as "unknown" downstream).

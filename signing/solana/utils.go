@@ -14,8 +14,6 @@ func TokenProgramOf(token2022 bool) common.PublicKey {
 	return common.TokenProgramID
 }
 
-// FindAssociatedTokenAddressWithProgram derives the ATA with the owning
-// token program in the seed; legacy and Token-2022 ATAs differ.
 func FindAssociatedTokenAddressWithProgram(wallet, mint common.PublicKey, token2022 bool) (common.PublicKey, uint8, error) {
 	seeds := [][]byte{
 		wallet.Bytes(),
@@ -30,8 +28,6 @@ func PublicKey2Address(publicKey []byte) (string, error) {
 	return address, nil
 }
 
-// IsNativeSentinel accepts both native markers: EVM-style 0xeee... and
-// So111...112, matching the rpc GetBalance convention.
 func IsNativeSentinel(address string) bool {
 	return address == signing.MagicContactAddressForNative ||
 		address == signing.MagicContactAddressForNativeSOL
@@ -41,14 +37,15 @@ func ValidAddress(address string) bool {
 	if address == signing.MagicContactAddressForNative {
 		return true
 	}
+	return ValidStrictAddress(address)
+}
+
+func ValidStrictAddress(address string) bool {
 	val, err := base58.Decode(address)
 	if err != nil {
 		return false
 	}
-	if len(val) != PublicKeyLength {
-		return false
-	}
-	return true
+	return len(val) == PublicKeyLength
 }
 
 const (

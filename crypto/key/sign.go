@@ -52,8 +52,22 @@ func VerifySignatureECDSAForUTXO(publicKey, data, sig []byte) bool {
 }
 
 func SignWithPrivateKeyED25519(privateKeyBytes, data []byte) ([]byte, error) {
-	sk := ed25519.NewKeyFromSeed(privateKeyBytes)
+	sk, err := ed25519PrivateKey(privateKeyBytes)
+	if err != nil {
+		return nil, err
+	}
 	return ed25519.Sign(sk, data), nil
+}
+
+func ed25519PrivateKey(b []byte) (ed25519.PrivateKey, error) {
+	switch len(b) {
+	case ed25519.SeedSize:
+		return ed25519.NewKeyFromSeed(b), nil
+	case ed25519.PrivateKeySize:
+		return ed25519.PrivateKey(b), nil
+	default:
+		return nil, fmt.Errorf("invalid ed25519 private key length %d", len(b))
+	}
 }
 
 func VerifySignatureED25519(publicKeyBytes, data, signature []byte) bool {

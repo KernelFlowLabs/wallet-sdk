@@ -77,7 +77,7 @@ func (h *Handler) GetBlockHeight(ctx context.Context) (string, error) {
 func (h *Handler) GetBalance(ctx context.Context, address, contractAddress, blockNumber string) (string, error) {
 	if contractAddress == signing.MagicContactAddressForNative ||
 		contractAddress == signing.MagicContactAddressForNativeSOL {
-		value, err := h.getBaseCoinBalance(ctx, address, blockNumber)
+		value, err := h.getBaseCoinBalance(ctx, address)
 		if err != nil {
 			return "", err
 		}
@@ -108,8 +108,6 @@ func (h *Handler) SendTx(ctx context.Context, signedHex string) (string, error) 
 		Params: []interface{}{
 			base64.StdEncoding.EncodeToString(tx),
 			_SendTransactionConfig{
-				// Preflight against processed: fast (~100-500ms) yet still
-				// surfaces simulation errors instead of a phantom signature.
 				SkipPreflight:       false,
 				MaxRetries:          5,
 				PreflightCommitment: "processed",
@@ -497,18 +495,13 @@ func (h *Handler) InquireChain(ctx context.Context, instruction, params string) 
 				goto DECIMALS_SECOND_TRY
 			}
 
-			var decimals string
 			if out[0].LegacyMetadata.Address != "" {
-				decimals = strconv.FormatInt(int64(out[0].LegacyMetadata.Decimals), 10)
-			} else if out[0].OnChainAccountInfo.AccountInfo.Data.Parsed.Info.Decimals != 0 {
-				decimals = strconv.FormatInt(int64(out[0].OnChainAccountInfo.AccountInfo.Data.Parsed.Info.Decimals), 10)
-			} else {
-				goto DECIMALS_SECOND_TRY
+				return strconv.FormatInt(int64(out[0].LegacyMetadata.Decimals), 10), nil
 			}
-			if decimals == "" || decimals == "0" {
-				goto DECIMALS_SECOND_TRY
+			if out[0].OnChainAccountInfo.AccountInfo.Data.Parsed.Info.Decimals != 0 {
+				return strconv.FormatInt(int64(out[0].OnChainAccountInfo.AccountInfo.Data.Parsed.Info.Decimals), 10), nil
 			}
-			return decimals, nil
+			goto DECIMALS_SECOND_TRY
 		}
 	DECIMALS_SECOND_TRY:
 		{
@@ -535,7 +528,7 @@ func (h *Handler) InquireChain(ctx context.Context, instruction, params string) 
 }
 
 // unexported
-func (h *Handler) getBaseCoinBalance(ctx context.Context, address, rpc string) (*big.Int, error) {
+func (h *Handler) getBaseCoinBalance(ctx context.Context, address string) (*big.Int, error) {
 	req := &_BaseRequest{
 		JsonRPC: "2.0",
 		ID:      0,
@@ -543,17 +536,12 @@ func (h *Handler) getBaseCoinBalance(ctx context.Context, address, rpc string) (
 		Params:  []string{address},
 	}
 	res := &_GetBalanceRes{}
-	var err error
-	if strings.EqualFold(rpc, "rpc1") {
-		err = h.rpc.Post(ctx, res, "", req)
-	} else {
-		rpc = "rpc"
-		err = h.rpc.Post(ctx, res, "", req)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to getBalance from %s, err=%v", rpc, err)
+	if err := h.rpc.Post(ctx, res, "", req); err != nil {
+		return nil, fmt.Errorf("failed to getBalance, err=%v", err)
 	} else if res.Error.Code != 0 {
-		return nil, fmt.Errorf("failed to getBalance from %s, errMsg=%s", rpc, res.Error.Message)
+		return nil, fmt.Errorf("failed to getBalance, errMsg=%s", res.Error.Message)
+	} else if res.Result.Value == nil {
+		return nil, fmt.Errorf("failed to getBalance, empty result")
 	}
 
 	return res.Result.Value, nil
@@ -640,7 +628,7 @@ type (
 	}
 	_Context struct {
 		ApiVersion string `json:"apiVersion,omitempty"`
-		Slot       uint64 `json:"slot" json:"slot,omitempty"`
+		Slot       uint64 `json:"slot"`
 	}
 	_GetSlotRes struct {
 		_BaseResponse
@@ -682,8 +670,8 @@ type (
 			Space   int    `json:"space"`
 		} `json:"data,omitempty"`
 		//Data1      []string `json:"data,omitempty"`
-		Executable bool   `json:"executable" json:"executable,omitempty"`
-		Lamports   uint64 `json:"lamports" json:"lamports,omitempty"`
+		Executable bool   `json:"executable"`
+		Lamports   uint64 `json:"lamports"`
 	}
 
 	_GetAccountInfoJsonRes struct {
@@ -706,14 +694,6 @@ type (
 		} `json:"result"`
 	}
 
-	//Fees struct {
-	//	Blockhash     string `json:"blockhash"`
-	//	FeeCalculator struct {
-	//		LamportsPerSignature uint64 `json:"lamportsPerSignature"`
-	//	} `json:"feeCalculator"`
-	//	LastValidSlot        uint64 `json:"lastValidSlot"`
-	//	LastValidBlockHeight uint64 `json:"lastValidBlockHeight"`
-	//}
 	_GetLatestBlockhash struct {
 		_BaseResponse
 		Result struct {
@@ -848,15 +828,6 @@ type (
 						ProgramID   string          `json:"programId"`
 						StackHeight interface{}     `json:"stackHeight"`
 						Parsed      json.RawMessage `json:"parsed"`
-						//Parsed      struct {
-						//	Info struct {
-						//		Amount      string `json:"amount"`
-						//		Authority   string `json:"authority"`
-						//		Destination string `json:"destination"`
-						//		Source      string `json:"source"`
-						//	} `json:"info"`
-						//	Type string `json:"type"`
-						//} `json:"parsed,omitempty"`
 						Program string `json:"program,omitempty"`
 					} `json:"instructions"`
 					RecentBlockhash string `json:"recentBlockhash"`
@@ -910,12 +881,6 @@ type (
 			Slot        int `json:"slot"`
 			Transaction struct {
 				Message struct {
-					// AccountKeys []struct {
-					// 	Pubkey   string `json:"pubkey"`
-					// 	Signer   bool   `json:"signer"`
-					// 	Source   string `json:"source"`
-					// 	Writable bool   `json:"writable"`
-					// } `json:"accountKeys"`
 					AccountKeys  []string `json:"accountKeys"`
 					Instructions []struct {
 						Accounts    []interface{}   `json:"accounts,omitempty"`
@@ -923,15 +888,6 @@ type (
 						ProgramID   string          `json:"programId"`
 						StackHeight interface{}     `json:"stackHeight"`
 						Parsed      json.RawMessage `json:"parsed"`
-						//Parsed      struct {
-						//	Info struct {
-						//		Amount      string `json:"amount"`
-						//		Authority   string `json:"authority"`
-						//		Destination string `json:"destination"`
-						//		Source      string `json:"source"`
-						//	} `json:"info"`
-						//	Type string `json:"type"`
-						//} `json:"parsed,omitempty"`
 						Program string `json:"program,omitempty"`
 					} `json:"instructions"`
 					RecentBlockhash string `json:"recentBlockhash"`
@@ -1009,12 +965,6 @@ type (
 		Transaction struct {
 			Message struct {
 				AccountKeys []string `json:"accountKeys"`
-				//AccountKeys []struct {
-				//	Pubkey   string `json:"pubkey"`
-				//	Signer   bool   `json:"signer"`
-				//	Source   string `json:"source"`
-				//	Writable bool   `json:"writable"`
-				//} `json:"accountKeys"`
 				Header struct {
 					NumReadonlySignedAccounts   int `json:"numReadonlySignedAccounts"`
 					NumReadonlyUnsignedAccounts int `json:"numReadonlyUnsignedAccounts"`
