@@ -3,8 +3,27 @@ package solana
 import (
 	"github.com/kernelflowlabs/wallet-sdk/signing"
 
+	"github.com/blocto/solana-go-sdk/common"
 	"github.com/mr-tron/base58"
 )
+
+func TokenProgramOf(token2022 bool) common.PublicKey {
+	if token2022 {
+		return common.Token2022ProgramID
+	}
+	return common.TokenProgramID
+}
+
+// FindAssociatedTokenAddressWithProgram derives the ATA with the owning
+// token program in the seed; legacy and Token-2022 ATAs differ.
+func FindAssociatedTokenAddressWithProgram(wallet, mint common.PublicKey, token2022 bool) (common.PublicKey, uint8, error) {
+	seeds := [][]byte{
+		wallet.Bytes(),
+		TokenProgramOf(token2022).Bytes(),
+		mint.Bytes(),
+	}
+	return common.FindProgramAddress(seeds, common.SPLAssociatedTokenAccountProgramID)
+}
 
 func PublicKey2Address(publicKey []byte) (string, error) {
 	address := base58.Encode(publicKey[:])

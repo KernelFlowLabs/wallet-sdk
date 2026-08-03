@@ -117,25 +117,27 @@ func (tx *TxBuilder) Build() error {
 				})
 				instructions = append(instructions, instructionTransfer)
 			} else {
+				is2022 := tx.Ingredient.Token2022 == "true"
 				contractPubkey := common.PublicKeyFromString(tx.Ingredient.ContractAddress)
-				senderTokenPubkey, _, err := common.FindAssociatedTokenAddress(senderPubkey, contractPubkey)
+				senderTokenPubkey, _, err := FindAssociatedTokenAddressWithProgram(senderPubkey, contractPubkey, is2022)
 				if err != nil {
 					return fmt.Errorf("failed to find associated token address for sender, err=%v", err)
 				}
-				recipientTokenPubkey, _, err := common.FindAssociatedTokenAddress(recipientPubkey, contractPubkey)
+				recipientTokenPubkey, _, err := FindAssociatedTokenAddressWithProgram(recipientPubkey, contractPubkey, is2022)
 				if err != nil {
 					return fmt.Errorf("failed to find associated token address for recipient, err=%v", err)
 				}
+				instructionTokenTransfer := tokenprog.Transfer(tokenprog.TransferParam{
+					From: senderTokenPubkey,
+					To:   recipientTokenPubkey,
+					Auth: senderPubkey,
+					Signers: []common.PublicKey{
+						senderPubkey,
+					},
+					Amount: amount,
+				})
+				instructionTokenTransfer.ProgramID = TokenProgramOf(is2022)
 				if tx.Ingredient.HasATA == "true" {
-					instructionTokenTransfer := tokenprog.Transfer(tokenprog.TransferParam{
-						From: senderTokenPubkey,
-						To:   recipientTokenPubkey,
-						Auth: senderPubkey,
-						Signers: []common.PublicKey{
-							senderPubkey,
-						},
-						Amount: amount,
-					})
 					instructions = append(instructions, instructionTokenTransfer)
 				} else {
 					instructionCreateAssociatedTokenAccount := assotokenprog.CreateAssociatedTokenAccount(
@@ -145,15 +147,12 @@ func (tx *TxBuilder) Build() error {
 							Mint:                   contractPubkey,
 							AssociatedTokenAccount: recipientTokenPubkey,
 						})
-					instructionTokenTransfer := tokenprog.Transfer(tokenprog.TransferParam{
-						From: senderTokenPubkey,
-						To:   recipientTokenPubkey,
-						Auth: senderPubkey,
-						Signers: []common.PublicKey{
-							senderPubkey,
-						},
-						Amount: amount,
-					})
+					// ATA-create carries the token program as an account; retarget for Token-2022.
+					for i := range instructionCreateAssociatedTokenAccount.Accounts {
+						if instructionCreateAssociatedTokenAccount.Accounts[i].PubKey == common.TokenProgramID {
+							instructionCreateAssociatedTokenAccount.Accounts[i].PubKey = TokenProgramOf(is2022)
+						}
+					}
 					instructions = append(instructions, instructionCreateAssociatedTokenAccount)
 					instructions = append(instructions, instructionTokenTransfer)
 				}
@@ -308,6 +307,7 @@ type (
 		UnitPrice                      string `json:"unitPrice,omitempty" validate:"omitempty,u64_gt0"`
 		UnitLimit                      string `json:"unitLimit,omitempty" validate:"omitempty,u64_gt0"`
 		HasATA                         string `json:"hasATA,omitempty" validate:"omitempty,bool_str"`
+		Token2022                      string `json:"token2022,omitempty" validate:"omitempty,bool_str"`
 		RefBlockHash                   string `json:"refBlockHash,omitempty"`
 		UseNonceAccount                string `json:"useNonceAccount,omitempty"`
 		NonceAccount                   string `json:"nonceAccount,omitempty"`

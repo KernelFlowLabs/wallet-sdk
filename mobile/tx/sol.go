@@ -71,6 +71,12 @@ func (b *SolTxBuilder) HasATA(has string) *SolTxBuilder {
 	return b
 }
 
+// SetToken2022 marks the mint as Token-2022 ("true"/"false").
+func (b *SolTxBuilder) SetToken2022(is string) *SolTxBuilder {
+	b.in.Ingredient.Token2022 = is
+	return b
+}
+
 func (b *SolTxBuilder) Build() error {
 	if b.err != nil {
 		return b.err

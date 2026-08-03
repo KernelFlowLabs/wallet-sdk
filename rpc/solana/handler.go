@@ -265,12 +265,18 @@ func (h *Handler) InquireChain(ctx context.Context, instruction, params string) 
 		}
 		address := tmp[0]
 		tokenAddress := tmp[1]
-		addressTokenPublic, _, err := common.FindAssociatedTokenAddress(common.PublicKeyFromString(address),
-			common.PublicKeyFromString(tokenAddress))
+		ownerPub := common.PublicKeyFromString(address)
+		mintPub := common.PublicKeyFromString(tokenAddress)
+		legacyATA, _, err := walletsolana.FindAssociatedTokenAddressWithProgram(ownerPub, mintPub, false)
 		if err != nil {
 			return "", fmt.Errorf("failed to FindAssociatedTokenAddress, err=%v", err)
 		}
-		addressTokenPublicB58 := addressTokenPublic.ToBase58()
+		ata2022, _, err := walletsolana.FindAssociatedTokenAddressWithProgram(ownerPub, mintPub, true)
+		if err != nil {
+			return "", fmt.Errorf("failed to FindAssociatedTokenAddress (token-2022), err=%v", err)
+		}
+		legacyATAB58 := legacyATA.ToBase58()
+		ata2022B58 := ata2022.ToBase58()
 		req := &_BaseRequest{
 			JsonRPC: "2.0",
 			ID:      0,
@@ -297,11 +303,13 @@ func (h *Handler) InquireChain(ctx context.Context, instruction, params string) 
 			return "", fmt.Errorf("failed to getTokenAccountsByOwner, err=%s", res.Error.Message)
 		}
 		for _, v := range res.Result.Value {
-			if v.Pubkey != addressTokenPublicB58 {
-				continue
-			} else if common.PublicKeyFromString(v.Account.Owner) != common.TokenProgramID {
-				continue
-			} else if v.Account.Data.Program != "spl-token" {
+			isLegacyATA := v.Pubkey == legacyATAB58 &&
+				common.PublicKeyFromString(v.Account.Owner) == common.TokenProgramID &&
+				v.Account.Data.Program == "spl-token"
+			is2022ATA := v.Pubkey == ata2022B58 &&
+				common.PublicKeyFromString(v.Account.Owner) == common.Token2022ProgramID &&
+				v.Account.Data.Program == "spl-token-2022"
+			if !isLegacyATA && !is2022ATA {
 				continue
 			} else if v.Account.Data.Parsed.Type != "account" {
 				continue
@@ -550,37 +558,44 @@ func (h *Handler) getBaseCoinBalance(ctx context.Context, address, rpc string) (
 
 	return res.Result.Value, nil
 }
+// getTokenBalance sums every token account for owner+mint; the mint filter
+// matches legacy SPL and Token-2022 accounts alike, ATA or auxiliary.
 func (h *Handler) getTokenBalance(ctx context.Context, address, contractAddress string) (*big.Int, error) {
-	ownerTokenPublic, _, err := common.FindAssociatedTokenAddress(
-		common.PublicKeyFromString(address),
-		common.PublicKeyFromString(contractAddress))
-	if err != nil {
-		return nil, fmt.Errorf("failed to FindAssociatedTokenAddress for"+
-			"address=%s and contract=%s, err=%v", address, contractAddress, err)
-	}
-	ownerTokenAddr := ownerTokenPublic.ToBase58()
 	req := &_BaseRequest{
 		JsonRPC: "2.0",
 		ID:      0,
-		Method:  "getTokenAccountBalance",
-		Params:  []string{ownerTokenAddr},
+		Method:  "getTokenAccountsByOwner",
+		Params: []interface{}{
+			address,
+			struct {
+				Mint string `json:"mint"`
+			}{contractAddress},
+			struct {
+				Encoding string `json:"encoding"`
+			}{"jsonParsed"},
+		},
 	}
-	res := &_GetTokenBalanceRes{}
-	err = h.rpc.Post(ctx, res, "", req)
+	res := &_GetTokenAccountsByOwnerResponse{}
+	err := h.rpc.Post(ctx, res, "", req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to getTokenAccountBalance, err=%v", err)
+		return nil, fmt.Errorf("failed to getTokenAccountsByOwner, err=%v", err)
 	} else if res.Error.Code != 0 {
-		if strings.Contains(res.Error.Message, "could not find account") {
-			return big.NewInt(0), nil
-		}
-		return nil, fmt.Errorf("failed to getTokenAccountBalance from, err=%s", res.Error.Message)
-	}
-	amount, ok := new(big.Int).SetString(res.Result.Value.Amount, 10)
-	if !ok {
-		return nil, fmt.Errorf("SetString failed")
+		return nil, fmt.Errorf("failed to getTokenAccountsByOwner, err=%s", res.Error.Message)
 	}
 
-	return amount, nil
+	total := big.NewInt(0)
+	for _, v := range res.Result.Value {
+		parsed := v.Account.Data.Parsed
+		if parsed.Type != "account" || parsed.Info.Mint != contractAddress {
+			continue
+		}
+		amount, ok := new(big.Int).SetString(parsed.Info.TokenAmount.Amount, 10)
+		if !ok {
+			return nil, fmt.Errorf("invalid token amount %q for account %s", parsed.Info.TokenAmount.Amount, v.Pubkey)
+		}
+		total.Add(total, amount)
+	}
+	return total, nil
 }
 func (h *Handler) getBlockByNumber(ctx context.Context, num uint64) (*_GetBlockByNumberRes, error) {
 	req := &_BaseRequest{
