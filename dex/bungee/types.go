@@ -4,6 +4,7 @@ import (
 	dexmodel "github.com/kernelflowlabs/wallet-sdk/common/dexmodel"
 	"encoding/json"
 	"fmt"
+	"math"
 )
 
 type (
@@ -61,7 +62,7 @@ type (
 			PriceInUsd   float64 `json:"priceInUsd"`
 			ValueInUsd   float64 `json:"valueInUsd"`
 		} `json:"output"`
-		EstimatedTime     int      `json:"estimatedTime"`
+		EstimatedTime     float64  `json:"estimatedTime"`
 		Slippage          float64  `json:"slippage"`
 		SuggestedSlippage float64  `json:"suggestedSlippage"`
 		RouteTags         []string `json:"routeTags"`
@@ -198,7 +199,7 @@ func (c *Client) toStandardQuoteRes(res *QuoteOut) *dexmodel.DexQuoteOut {
 			Slippage:          rt.Slippage,
 			SuggestedSlippage: rt.SuggestedSlippage,
 			FeeInUsd:          fmt.Sprintf("%.2f", rt.GasFee.FeeInUsd),
-			EstimatedTime:     int64(rt.EstimatedTime),
+			EstimatedTime:     int64(math.Round(rt.EstimatedTime)),
 			NeedBuild:         false,
 			UserOp:            rt.UserOp,
 			GasLimit:          string(rt.GasFee.GasLimit),
