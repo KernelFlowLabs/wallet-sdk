@@ -197,13 +197,13 @@ func init() {
 	if err := signing.RegisterAddressValidator("btc_addr", ValidAddressForBTC); err != nil {
 		panic(err)
 	}
-	if err := signing.RegisterAddressValidator("ltc_addr", ValidAddressForBTC); err != nil {
+	if err := signing.RegisterAddressValidator("ltc_addr", ValidAddressForLTC); err != nil {
 		panic(err)
 	}
-	if err := signing.RegisterAddressValidator("doge_addr", ValidAddressForBTC); err != nil {
+	if err := signing.RegisterAddressValidator("doge_addr", ValidAddressForDOGE); err != nil {
 		panic(err)
 	}
-	if err := signing.RegisterAddressValidator("btc_addr", ValidAddressForBTC); err != nil {
+	if err := signing.RegisterAddressValidator("sys_addr", ValidAddressForSYS); err != nil {
 		panic(err)
 	}
 }

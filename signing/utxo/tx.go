@@ -54,6 +54,34 @@ func (tx *TxBuilder) Build() error {
 	if tx == nil {
 		return fmt.Errorf("tx == nil")
 	}
+	if tx.Ingredient == nil {
+		return fmt.Errorf("ingredient == nil")
+	}
+	if tx.Ingredient.Utxos == nil || len(tx.Ingredient.Utxos.List) == 0 {
+		return fmt.Errorf("no utxos")
+	}
+	if !ValidAddress(tx.Ingredient.Recipient, tx.network) {
+		return fmt.Errorf("invalid recipient address")
+	}
+	if !ValidAddress(tx.Ingredient.Sender, tx.network) {
+		return fmt.Errorf("invalid sender address")
+	}
+	if byteFee, err := strconv.ParseInt(tx.Ingredient.ByteFee, 10, 64); err != nil || byteFee <= 0 {
+		return fmt.Errorf("invalid byteFee %q", tx.Ingredient.ByteFee)
+	}
+	if tx.Ingredient.Amount != signing.MagicNumberForMaxAmount {
+		if v, err := strconv.ParseInt(tx.Ingredient.Amount, 10, 64); err != nil || v <= 0 {
+			return fmt.Errorf("invalid amount %q", tx.Ingredient.Amount)
+		}
+	}
+	for _, u := range tx.Ingredient.Utxos.List {
+		if v, err := strconv.ParseInt(u.Value, 10, 64); err != nil || v <= 0 {
+			return fmt.Errorf("invalid utxo value %q", u.Value)
+		}
+	}
+	tx.sigHash = nil
+	tx.unsignedHex = ""
+	tx.txHash = ""
 
 	var sigHash []string
 	var unsignedHex string
@@ -253,6 +281,29 @@ const DefaultInputBytes = 148
 const DefaultOutputBytes = 34
 const DefaultDust = 546
 
+const (
+	vbytesP2WPKHInput = 68
+	vbytesP2TRInput   = 58
+	bytesP2PKHInput   = 148
+	bytesOutput       = 34
+	bytesOverhead     = 11
+)
+
+func estimateVBytes(network string, numInputs, numOutputs int) int64 {
+	perInput := int64(vbytesP2WPKHInput)
+	switch network {
+	case NetworkEnumForBTCP2TR:
+		perInput = vbytesP2TRInput
+	case NetworkEnumForDOGE:
+		perInput = bytesP2PKHInput
+	}
+	return int64(numInputs)*perInput + int64(numOutputs)*bytesOutput + bytesOverhead
+}
+
+func estimateFee(network string, byteFee int64, numInputs, numOutputs int) int64 {
+	return estimateVBytes(network, numInputs, numOutputs) * byteFee
+}
+
 type (
 	Ingredient struct {
 		TxType                string            `json:"txType" validate:"required,oneof=0 1 2 3 4 5 6"`
@@ -263,7 +314,7 @@ type (
 		Amount                string            `json:"amount" validate:"required,i64"`
 		ByteFee               string            `json:"byteFee" validate:"required,i64"`
 		Utxos                 *signing.UtxoList `json:"utxos" validate:"required"`
-		IsPSBT                bool              `json:"isPSBT,omitempty" validate:"omitempty,bool_hex"`
+		IsPSBT                bool              `json:"isPSBT,omitempty"`
 		InscriptionIdsForHash map[string]string `json:"inscriptionIdsForHash,omitempty"`
 		Memo                  string            `json:"memo,omitempty" validate:"omitempty,hex_str"`
 	}
@@ -302,31 +353,34 @@ func buildForBTC(i *Ingredient) ([]string, string, error) {
 	}
 
 	byteFee, _ := strconv.ParseInt(i.ByteFee, 10, 64)
-	bytesLen := int64(0)
+	numInputs := len(i.Utxos.List)
 	var toAddrArr []string
 	var toAmountArr []int64
 	if i.Amount == signing.MagicNumberForMaxAmount {
-		bytesLen = int64(len(i.Utxos.List)*180 + (1)*34 + 10)
-		fee := bytesLen * byteFee
+		fee := estimateFee(NetworkEnumForBTC, byteFee, numInputs, 1)
+		send := totalHas - fee
+		if send < DefaultDust {
+			return nil, "", fmt.Errorf("sweep amount below dust: totalHas=%d, fee=%d", totalHas, fee)
+		}
 		toAddrArr = append(toAddrArr, i.Recipient)
-		toAmountArr = append(toAmountArr, totalHas-fee)
+		toAmountArr = append(toAmountArr, send)
 	} else {
 		value, _ := strconv.ParseInt(i.Amount, 10, 64)
+		if value < DefaultDust {
+			return nil, "", fmt.Errorf("amount below dust: %d", value)
+		}
 		toAddrArr = append(toAddrArr, i.Recipient)
 		toAmountArr = append(toAmountArr, value)
-		bytesLen = int64(len(i.Utxos.List)*180 + (len(toAddrArr))*34 + 10)
-		fee := bytesLen * byteFee
-		change := totalHas - fee - value
-		if change > 0 {
-			if change < DefaultDust {
-				return nil, "", fmt.Errorf("change < DefaultDust")
-			}
+		feeWithChange := estimateFee(NetworkEnumForBTC, byteFee, numInputs, 2)
+		change := totalHas - feeWithChange - value
+		if change >= DefaultDust {
 			toAddrArr = append(toAddrArr, i.Sender)
 			toAmountArr = append(toAmountArr, change)
-		} else if change == 0 {
-
 		} else {
-			return nil, "", fmt.Errorf("value too large, totalHas=%d, value=%d, fee=%d", totalHas, value, fee)
+			feeNoChange := estimateFee(NetworkEnumForBTC, byteFee, numInputs, 1)
+			if totalHas-feeNoChange-value < 0 {
+				return nil, "", fmt.Errorf("value too large, totalHas=%d, value=%d, fee=%d", totalHas, value, feeNoChange)
+			}
 		}
 	}
 
@@ -434,33 +488,34 @@ func buildForLTC(i *Ingredient) ([]string, string, error) {
 		totalHas += value
 	}
 	byteFee, _ := strconv.ParseInt(i.ByteFee, 10, 64)
-	bytesLen := int64(0)
+	numInputs := len(i.Utxos.List)
 	var toAddrArr []string
 	var toAmountArr []int64
 	if i.Amount == signing.MagicNumberForMaxAmount {
-		bytesLen = int64(len(i.Utxos.List)*68 + 1*31 + 11)
-		fee := bytesLen * byteFee
+		fee := estimateFee(NetworkEnumForLTC, byteFee, numInputs, 1)
+		send := totalHas - fee
+		if send < DefaultDust {
+			return nil, "", fmt.Errorf("sweep amount below dust: totalHas=%d, fee=%d", totalHas, fee)
+		}
 		toAddrArr = append(toAddrArr, i.Recipient)
-		toAmountArr = append(toAmountArr, totalHas-fee)
+		toAmountArr = append(toAmountArr, send)
 	} else {
 		value, _ := strconv.ParseInt(i.Amount, 10, 64)
-		numOutputs := 2
-		bytesLen = int64(len(i.Utxos.List)*68 + numOutputs*31 + 11)
-		fee := bytesLen * byteFee
-
+		if value < DefaultDust {
+			return nil, "", fmt.Errorf("amount below dust: %d", value)
+		}
 		toAddrArr = append(toAddrArr, i.Recipient)
 		toAmountArr = append(toAmountArr, value)
-		change := totalHas - fee - value
-
-		if change > 0 {
-			if change < DefaultDust {
-				return nil, "", fmt.Errorf("change < DefaultDust")
-			}
+		feeWithChange := estimateFee(NetworkEnumForLTC, byteFee, numInputs, 2)
+		change := totalHas - feeWithChange - value
+		if change >= DefaultDust {
 			toAddrArr = append(toAddrArr, i.Sender)
 			toAmountArr = append(toAmountArr, change)
-		} else if change == 0 {
 		} else {
-			return nil, "", fmt.Errorf("value too large, totalHas=%d, value=%d, fee=%d", totalHas, value, fee)
+			feeNoChange := estimateFee(NetworkEnumForLTC, byteFee, numInputs, 1)
+			if totalHas-feeNoChange-value < 0 {
+				return nil, "", fmt.Errorf("value too large, totalHas=%d, value=%d, fee=%d", totalHas, value, feeNoChange)
+			}
 		}
 	}
 
@@ -539,34 +594,44 @@ func buildForDOGE(i *Ingredient) ([]string, string, error) {
 	}
 
 	byteFee, _ := strconv.ParseInt(i.ByteFee, 10, 64)
-	bytesLen := int64(0)
+	numInputs := len(i.Utxos.List)
+	const dogeMinFee = 5000000
 	var toAddrArr []string
 	var toAmountArr []int64
 	if i.Amount == signing.MagicNumberForMaxAmount {
-		bytesLen = int64(len(i.Utxos.List)*180 + (1)*34 + 10)
-		fee := bytesLen * byteFee
+		fee := estimateFee(NetworkEnumForDOGE, byteFee, numInputs, 1)
+		if fee < dogeMinFee {
+			fee = dogeMinFee
+		}
+		send := totalHas - fee
+		if send < DefaultDust {
+			return nil, "", fmt.Errorf("sweep amount below dust: totalHas=%d, fee=%d", totalHas, fee)
+		}
 		toAddrArr = append(toAddrArr, i.Recipient)
-		toAmountArr = append(toAmountArr, totalHas-fee)
+		toAmountArr = append(toAmountArr, send)
 	} else {
 		value, _ := strconv.ParseInt(i.Amount, 10, 64)
-		bytesLen = int64(len(i.Utxos.List)*180 + (2)*34 + 10)
-		fee := bytesLen * byteFee
-		if fee < 5000000 {
-			fee = 5000000
+		if value < DefaultDust {
+			return nil, "", fmt.Errorf("amount below dust: %d", value)
+		}
+		feeWithChange := estimateFee(NetworkEnumForDOGE, byteFee, numInputs, 2)
+		if feeWithChange < dogeMinFee {
+			feeWithChange = dogeMinFee
 		}
 		toAddrArr = append(toAddrArr, i.Recipient)
 		toAmountArr = append(toAmountArr, value)
-		change := totalHas - fee - value
-		if change > 0 {
-			if change < DefaultDust {
-				return nil, "", fmt.Errorf("change < DefaultDust")
-			}
+		change := totalHas - feeWithChange - value
+		if change >= DefaultDust {
 			toAddrArr = append(toAddrArr, i.Sender)
 			toAmountArr = append(toAmountArr, change)
-		} else if change == 0 {
-
 		} else {
-			return nil, "", fmt.Errorf("value too large")
+			feeNoChange := estimateFee(NetworkEnumForDOGE, byteFee, numInputs, 1)
+			if feeNoChange < dogeMinFee {
+				feeNoChange = dogeMinFee
+			}
+			if totalHas-feeNoChange-value < 0 {
+				return nil, "", fmt.Errorf("value too large")
+			}
 		}
 	}
 
@@ -673,31 +738,34 @@ func buildForSYS(i *Ingredient) ([]string, string, error) {
 	}
 
 	byteFee, _ := strconv.ParseInt(i.ByteFee, 10, 64)
-	bytesLen := int64(0)
+	numInputs := len(i.Utxos.List)
 	var toAddrArr []string
 	var toAmountArr []int64
 	if i.Amount == signing.MagicNumberForMaxAmount {
-		bytesLen = int64(len(i.Utxos.List)*180 + (1)*34 + 10)
-		fee := bytesLen * byteFee
+		fee := estimateFee(NetworkEnumForSYS, byteFee, numInputs, 1)
+		send := totalHas - fee
+		if send < DefaultDust {
+			return nil, "", fmt.Errorf("sweep amount below dust: totalHas=%d, fee=%d", totalHas, fee)
+		}
 		toAddrArr = append(toAddrArr, i.Recipient)
-		toAmountArr = append(toAmountArr, totalHas-fee)
+		toAmountArr = append(toAmountArr, send)
 	} else {
 		value, _ := strconv.ParseInt(i.Amount, 10, 64)
-		bytesLen = int64(len(i.Utxos.List)*180 + (2)*34 + 10)
-		fee := bytesLen * byteFee
+		if value < DefaultDust {
+			return nil, "", fmt.Errorf("amount below dust: %d", value)
+		}
 		toAddrArr = append(toAddrArr, i.Recipient)
 		toAmountArr = append(toAmountArr, value)
-		change := totalHas - fee - value
-		if change > 0 {
-			if change < DefaultDust {
-				return nil, "", fmt.Errorf("change < DefaultDust")
-			}
+		feeWithChange := estimateFee(NetworkEnumForSYS, byteFee, numInputs, 2)
+		change := totalHas - feeWithChange - value
+		if change >= DefaultDust {
 			toAddrArr = append(toAddrArr, i.Sender)
 			toAmountArr = append(toAmountArr, change)
-		} else if change == 0 {
-
 		} else {
-			return nil, "", fmt.Errorf("value too large")
+			feeNoChange := estimateFee(NetworkEnumForSYS, byteFee, numInputs, 1)
+			if totalHas-feeNoChange-value < 0 {
+				return nil, "", fmt.Errorf("value too large")
+			}
 		}
 	}
 
@@ -800,7 +868,13 @@ func extractSigHashes(packet *psbt.Packet) ([]string, error) {
 
 		case input.NonWitnessUtxo != nil:
 			utxo := input.NonWitnessUtxo
+			if i >= len(packet.UnsignedTx.TxIn) {
+				return nil, fmt.Errorf("input %d out of range for unsigned tx", i)
+			}
 			txIn := packet.UnsignedTx.TxIn[i]
+			if int(txIn.PreviousOutPoint.Index) >= len(utxo.TxOut) {
+				return nil, fmt.Errorf("input %d prevout index %d out of range", i, txIn.PreviousOutPoint.Index)
+			}
 			pkScript := utxo.TxOut[txIn.PreviousOutPoint.Index].PkScript
 
 			hash, err := txscript.CalcSignatureHash(
