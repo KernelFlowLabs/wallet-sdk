@@ -35,6 +35,9 @@ func (tx *TxBuilder) Build() error {
 	if !ok {
 		return fmt.Errorf("fail to SetString for Amount")
 	}
+	if amount.Sign() < 0 {
+		return fmt.Errorf("amount must not be negative")
+	}
 	amountBigInt := BigInt(*amount)
 	nonce, err := strconv.ParseUint(tx.Ingredient.Nonce, 10, 64)
 	if err != nil {
@@ -48,10 +51,16 @@ func (tx *TxBuilder) Build() error {
 	if !ok {
 		return fmt.Errorf("fail to SetString for GasFeeCap")
 	}
+	if gasFeeCap.Sign() < 0 {
+		return fmt.Errorf("gasFeeCap must not be negative")
+	}
 	gasFeeCapBigInt := BigInt(*gasFeeCap)
 	gasPremium, ok := big.NewInt(0).SetString(tx.Ingredient.GasPremium, 10)
 	if !ok {
 		return fmt.Errorf("fail to SetString for GasPremium")
+	}
+	if gasPremium.Sign() < 0 {
+		return fmt.Errorf("gasPremium must not be negative")
 	}
 	gasPremiumBigInt := BigInt(*gasPremium)
 

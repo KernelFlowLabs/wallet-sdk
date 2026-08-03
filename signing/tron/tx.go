@@ -34,7 +34,13 @@ func (tx *TxBuilder) Build() error {
 	var payload []byte
 	var amount int64
 	senderBytes = ConvertToBytes(tx.Ingredient.Sender)
-	refBlockHash, _ := hex.DecodeString(tx.Ingredient.RefBlockHash)
+	refBlockHash, err := hex.DecodeString(tx.Ingredient.RefBlockHash)
+	if err != nil {
+		return fmt.Errorf("invalid refBlockHash: %v", err)
+	}
+	if len(refBlockHash) < 16 {
+		return fmt.Errorf("refBlockHash too short: %d bytes", len(refBlockHash))
+	}
 	refBlockNum, _ := strconv.ParseInt(tx.Ingredient.RefBlockNumber, 10, 64)
 	refBlockNumBytes := Int64ToBytes(refBlockNum)
 	if len(refBlockNumBytes) < 8 {
@@ -46,7 +52,6 @@ func (tx *TxBuilder) Build() error {
 	var valueBytes []byte
 	var typeUrl string
 	var txType int32
-	var err error
 	switch tx.Ingredient.TxType {
 	case signing.TxTypeTransfer:
 		if tx.Ingredient.Recipient == "" {

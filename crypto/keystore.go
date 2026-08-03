@@ -153,6 +153,9 @@ func ReadFromKeyStore(ksString, password string, isMn bool) (string, error) {
 	if dkLen != 32 {
 		return "", fmt.Errorf("unsupported dklen: %d", dkLen)
 	}
+	if err := checkScryptParams(scryptN, scryptR, scryptP); err != nil {
+		return "", err
+	}
 
 	salt, err := hex.DecodeString(ks.Crypto.Kdfparams.Salt)
 	if err != nil {
@@ -220,6 +223,9 @@ func ReadFromGethKeyStore(ksString string, password string) (string, error) {
 	salt, err := hex.DecodeString(ks.Crypto.Kdfparams.Salt)
 	if err != nil {
 		return "", fmt.Errorf("invalid salt: %w", err)
+	}
+	if err := checkScryptParams(ks.Crypto.Kdfparams.N, ks.Crypto.Kdfparams.R, ks.Crypto.Kdfparams.P); err != nil {
+		return "", err
 	}
 	derivedKey, err := scrypt.Key([]byte(password), salt,
 		ks.Crypto.Kdfparams.N, ks.Crypto.Kdfparams.R, ks.Crypto.Kdfparams.P, dkLen)
@@ -302,3 +308,19 @@ type (
 		Version int          `json:"version"`
 	}
 )
+
+func checkScryptParams(n, r, p int) error {
+	if n <= 1 || n&(n-1) != 0 {
+		return fmt.Errorf("invalid scrypt N: %d", n)
+	}
+	if n > 1<<20 {
+		return fmt.Errorf("scrypt N too large: %d", n)
+	}
+	if r < 1 || r > 16 {
+		return fmt.Errorf("invalid scrypt r: %d", r)
+	}
+	if p < 1 || p > 16 {
+		return fmt.Errorf("invalid scrypt p: %d", p)
+	}
+	return nil
+}

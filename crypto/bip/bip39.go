@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	"golang.org/x/crypto/pbkdf2"
+	"golang.org/x/text/unicode/norm"
 )
 
 var (
@@ -188,6 +189,8 @@ func NewSeedWithErrorChecking(mnemonic string, password string) ([]byte, error) 
 
 func NewSeed(mnemonic string, password string) []byte {
 	mnemonic = strings.Join(strings.Fields(mnemonic), " ")
+	mnemonic = norm.NFKD.String(mnemonic)
+	password = norm.NFKD.String(password)
 	return pbkdf2.Key([]byte(mnemonic), []byte("mnemonic"+password), 2048, 64, sha512.New)
 }
 

@@ -137,6 +137,9 @@ func (tx *TxBuilder) bounds() (l1, l2, l1data resourceBound, tip uint64, err err
 		if !ok {
 			return nil, fmt.Errorf("bad %s %q", name, s)
 		}
+		if n.Sign() < 0 || n.BitLen() > 128 {
+			return nil, fmt.Errorf("%s out of range %q", name, s)
+		}
 		return n, nil
 	}
 	var e error

@@ -130,6 +130,9 @@ func (tx *TxBuilder) Sign(privateKey []byte) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to DecodeString for SigHash, err=%v", err)
 	}
+	if len(privateKey) != ed25519.SeedSize {
+		return "", fmt.Errorf("invalid private key length %d", len(privateKey))
+	}
 	sk := ed25519.NewKeyFromSeed(privateKey)
 	pk := sk.Public().(ed25519.PublicKey)
 	signature, err := sk.Sign(rand.Reader, signingMessage, crypto.Hash(0))

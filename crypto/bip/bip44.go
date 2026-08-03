@@ -18,7 +18,7 @@ func SeedToKeyForECDSA(seed []byte, path string) (*Key, error) {
 	path = strings.TrimPrefix(path, "m/")
 	for _, v := range strings.Split(path, "/") {
 		hardened := strings.HasSuffix(v, `'`)
-		n, err := strconv.ParseUint(strings.TrimSuffix(v, `'`), 10, 64)
+		n, err := strconv.ParseUint(strings.TrimSuffix(v, `'`), 10, 31)
 		if err != nil {
 			return nil, fmt.Errorf("failed to ParseUint, err=%v", err)
 		}
@@ -47,7 +47,7 @@ func SeedToKeyForED25519(seed []byte, path string) (*Key, error) {
 	tmp := strings.Split(path, "/")
 	var paths []uint32
 	for _, v := range tmp {
-		n, err := strconv.ParseUint(strings.TrimSuffix(v, `'`), 10, 64)
+		n, err := strconv.ParseUint(strings.TrimSuffix(v, `'`), 10, 31)
 		if err != nil {
 			return nil, fmt.Errorf("failed to ParseUint, err=%v", err)
 		}

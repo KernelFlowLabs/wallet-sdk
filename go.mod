@@ -114,7 +114,7 @@ require (
 	github.com/supranational/blst v0.3.16 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20220614013038-64ee5596c38a // indirect
 	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/text v0.40.0 // indirect
+	golang.org/x/text v0.40.0
 	launchpad.net/gocheck v0.0.0-20140225173054-000000000087 // indirect
 )
 

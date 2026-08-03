@@ -36,6 +36,9 @@ func (tx *TxBuilder) Build() error {
 	if !ok {
 		return fmt.Errorf("fail to SetString Amount")
 	}
+	if amountBig.Sign() < 0 {
+		return fmt.Errorf("amount must not be negative")
+	}
 	senderAaddr, err := tongo.ParseAddress(tx.Ingredient.Sender)
 	if err != nil {
 		return fmt.Errorf("fail to ParseAddress for sender, err=%v", err)
@@ -58,6 +61,9 @@ func (tx *TxBuilder) Build() error {
 	var intMsg tlb.Message
 	var mode uint8
 	if tx.Ingredient.ContractAddress == signing.MagicContactAddressForNative {
+		if amountBig.BitLen() > 64 {
+			return fmt.Errorf("amount out of range %q", tx.Ingredient.Amount)
+		}
 		messages := wallet.SimpleTransfer{
 			Amount:  tlb.Grams(amountBig.Uint64()),
 			Address: recipientAddr.ID,
@@ -81,6 +87,9 @@ func (tx *TxBuilder) Build() error {
 		feeBig, ok := big.NewInt(0).SetString(tx.Ingredient.Fee, 10)
 		if !ok {
 			return fmt.Errorf("fail to SetString Fee")
+		}
+		if feeBig.Sign() < 0 || feeBig.BitLen() > 64 {
+			return fmt.Errorf("fee out of range %q", tx.Ingredient.Fee)
 		}
 		messages := jetton.TransferMessage{
 			Jetton: &jetton.Jetton{

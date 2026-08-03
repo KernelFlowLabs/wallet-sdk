@@ -71,10 +71,10 @@ func ed25519PrivateKey(b []byte) (ed25519.PrivateKey, error) {
 }
 
 func VerifySignatureED25519(publicKeyBytes, data, signature []byte) bool {
-	if !ed25519.Verify(publicKeyBytes, data, signature) {
+	if len(publicKeyBytes) != ed25519.PublicKeySize {
 		return false
 	}
-	return true
+	return ed25519.Verify(publicKeyBytes, data, signature)
 }
 
 func SignWithPrivateKeySchnorr(privateKeyBytes, data []byte) ([]byte, error) {
