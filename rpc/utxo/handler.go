@@ -675,8 +675,6 @@ func (h *Handler) getTxStatusFromBlockcypherByCurl(ctx context.Context, chainNam
 
 	outputStr := string(output)
 	if strings.Contains(outputStr, "not found") ||
-		strings.Contains(outputStr, "404") ||
-		strings.Contains(outputStr, "500") ||
 		strings.Contains(outputStr, "\"error\"") {
 		result.Status = signing.TxStatusPending
 		return result, nil
