@@ -45,14 +45,29 @@ const (
 func (c *Candidate) CrossChain() bool { return c.FromChain != c.ToChain }
 
 type Request struct {
-	FromAmount    string
-	SlippageBps   int
-	Timeout       time.Duration
-	FromAmountUsd float64
-	ToPriceUsd    float64
-	FeeRate       string
-	FeeReceiver   string
-	ScamCheck     func(chain, token string) bool
+	FromAmount              string
+	SlippageBps             int
+	Timeout                 time.Duration
+	FromAmountUsd           float64
+	ToPriceUsd              float64
+	FeeRate                 string
+	FeeReceiver             string
+	UserOps                 []string
+	RefundAddress           string
+	ContractCaller          string
+	FeeBps                  string
+	FeeTakerAddress         string
+	Refuel                  *bool
+	DestinationPayload      string
+	DestinationGasLimit     string
+	IncludeProvider         string
+	ExcludeProvider         string
+	Exchange                string
+	IncludeQuoteRejections  *bool
+	Private                 *bool
+	SimulatedQuotesRequired *bool
+	SolanaSponsorAddress    string
+	ScamCheck               func(chain, token string) bool
 }
 
 type Route struct {
@@ -159,16 +174,31 @@ func (e *Engine) Quote(ctx context.Context, req *Request, cands []*Candidate, qu
 				return
 			}
 			in := &dexmodel.DexQuoteIn{
-				FromChain:   c.FromChain,
-				ToChain:     c.ToChain,
-				FromToken:   c.FromToken,
-				ToToken:     c.ToToken,
-				FromAddress: c.FromAddress,
-				ToAddress:   c.ToAddress,
-				FromAmount:  req.FromAmount,
-				Slippage:    slippagePct,
-				FeeRate:     feeRate,
-				FeeReceiver: req.FeeReceiver,
+				FromChain:               c.FromChain,
+				ToChain:                 c.ToChain,
+				FromToken:               c.FromToken,
+				ToToken:                 c.ToToken,
+				FromAddress:             c.FromAddress,
+				ToAddress:               c.ToAddress,
+				FromAmount:              req.FromAmount,
+				Slippage:                slippagePct,
+				FeeRate:                 feeRate,
+				FeeReceiver:             req.FeeReceiver,
+				UserOps:                 append([]string(nil), req.UserOps...),
+				RefundAddress:           req.RefundAddress,
+				ContractCaller:          req.ContractCaller,
+				FeeBps:                  req.FeeBps,
+				FeeTakerAddress:         req.FeeTakerAddress,
+				Refuel:                  req.Refuel,
+				DestinationPayload:      req.DestinationPayload,
+				DestinationGasLimit:     req.DestinationGasLimit,
+				IncludeProvider:         req.IncludeProvider,
+				ExcludeProvider:         req.ExcludeProvider,
+				Exchange:                req.Exchange,
+				IncludeQuoteRejections:  req.IncludeQuoteRejections,
+				Private:                 req.Private,
+				SimulatedQuotesRequired: req.SimulatedQuotesRequired,
+				SolanaSponsorAddress:    req.SolanaSponsorAddress,
 			}
 			out, err := quote(qctx, c, in)
 			results[i] = result{c, out, err}

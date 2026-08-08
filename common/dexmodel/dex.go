@@ -4,22 +4,33 @@ import "encoding/json"
 
 type (
 	DexQuoteIn struct {
-		FromChain        string `json:"fromChain"`
-		ToChain          string `json:"toChain"`
-		FromToken        string `json:"fromToken"`
-		ToToken          string `json:"toToken"`
-		FromAddress      string `json:"fromAddress"`
-		ToAddress        string `json:"toAddress"`
-		FromAmount       string `json:"fromAmount"`
-		Slippage         string `json:"slippage"`
-		FeeRate          string `json:"feeRate,omitempty"`
-		FeeReceiver      string `json:"feeReceiver,omitempty"`
-		FromValueUsd     string `json:"fromValueUsd,omitempty"`
-		GasOnDestination string `json:"gasOnDestination,omitempty"`
-		// ExcludeProvider is a comma-separated list of Socket provider IDs.
-		// For cross-chain quotes Socket interprets these as bridge IDs (for
-		// example "across"); for same-chain quotes they are DEX IDs.
-		ExcludeProvider string `json:"excludeProvider,omitempty"`
+		FromChain               string   `json:"fromChain"`
+		ToChain                 string   `json:"toChain"`
+		FromToken               string   `json:"fromToken"`
+		ToToken                 string   `json:"toToken"`
+		FromAddress             string   `json:"fromAddress"`
+		ToAddress               string   `json:"toAddress"`
+		FromAmount              string   `json:"fromAmount"`
+		Slippage                string   `json:"slippage"`
+		FeeRate                 string   `json:"feeRate,omitempty"`
+		FeeReceiver             string   `json:"feeReceiver,omitempty"`
+		FromValueUsd            string   `json:"fromValueUsd,omitempty"`
+		GasOnDestination        string   `json:"gasOnDestination,omitempty"`
+		UserOps                 []string `json:"userOps,omitempty"`
+		RefundAddress           string   `json:"refundAddress,omitempty"`
+		ContractCaller          string   `json:"contractCaller,omitempty"`
+		FeeBps                  string   `json:"feeBps,omitempty"`
+		FeeTakerAddress         string   `json:"feeTakerAddress,omitempty"`
+		Refuel                  *bool    `json:"refuel,omitempty"`
+		DestinationPayload      string   `json:"destinationPayload,omitempty"`
+		DestinationGasLimit     string   `json:"destinationGasLimit,omitempty"`
+		IncludeProvider         string   `json:"includeProvider,omitempty"`
+		ExcludeProvider         string   `json:"excludeProvider,omitempty"`
+		Exchange                string   `json:"exchange,omitempty"`
+		IncludeQuoteRejections  *bool    `json:"includeQuoteRejections,omitempty"`
+		Private                 *bool    `json:"private,omitempty"`
+		SimulatedQuotesRequired *bool    `json:"simulatedQuotesRequired,omitempty"`
+		SolanaSponsorAddress    string   `json:"solanaSponsorAddress,omitempty"`
 	}
 	DexQuoteOut struct {
 		Channel string      `json:"channel"`
@@ -67,19 +78,30 @@ type (
 	}
 
 	DexCheckTxIn struct {
-		Channel   string      `json:"channel"`
-		HashType  DexHashType `json:"hashType"`
-		Hash      string      `json:"hash"`
-		FromChain string      `json:"fromChain"`
-		ToChain   string      `json:"toChain"`
-		Bridge    string      `json:"bridge,omitempty"`
+		Channel             string      `json:"channel"`
+		HashType            DexHashType `json:"hashType"`
+		Hash                string      `json:"hash"`
+		FromChain           string      `json:"fromChain"`
+		ToChain             string      `json:"toChain"`
+		Bridge              string      `json:"bridge,omitempty"`
+		IncludeQuoteDetails *bool       `json:"includeQuoteDetails,omitempty"`
 	}
 	DexCheckTxOut struct {
-		Channel string    `json:"channel"`
-		Status  DexStatus `json:"status"`
-		ToChain string    `json:"toChain"`
-		ToHash  string    `json:"toHash"`
-		Msg     string    `json:"msg,omitempty"`
+		Channel               string          `json:"channel"`
+		Status                DexStatus       `json:"status"`
+		ToChain               string          `json:"toChain"`
+		ToHash                string          `json:"toHash"`
+		FromHash              string          `json:"fromHash,omitempty"`
+		ProviderStatus        string          `json:"providerStatus,omitempty"`
+		ProviderStatusCode    string          `json:"providerStatusCode,omitempty"`
+		OriginStatus          string          `json:"originStatus,omitempty"`
+		DestinationStatus     string          `json:"destinationStatus,omitempty"`
+		UserOp                string          `json:"userOp,omitempty"`
+		RouteName             string          `json:"routeName,omitempty"`
+		RouteLogoURI          string          `json:"routeLogoURI,omitempty"`
+		IsDestPayloadExecuted *bool           `json:"isDestPayloadExecuted,omitempty"`
+		QuoteDetails          json.RawMessage `json:"quoteDetails,omitempty"`
+		Msg                   string          `json:"msg,omitempty"`
 	}
 )
 

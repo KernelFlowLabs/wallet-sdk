@@ -10,17 +10,21 @@ import (
 )
 
 var (
-	tradeMu sync.RWMutex
-	jup     *jupiter.Client
-	server  string
+	tradeMu           sync.RWMutex
+	jup               *jupiter.Client
+	server            string
+	bungeeAPIKey      string
+	bungeeAffiliateID string
 )
 
 func Init(configJSON string) string {
 	var cfg struct {
-		JupiterAPIKey string `json:"jupiter_api_key"`
-		SolanaRPC     string `json:"solana_rpc"`
-		FeeAccount    string `json:"fee_account"`
-		ServerURL     string `json:"server_url"`
+		JupiterAPIKey     string `json:"jupiter_api_key"`
+		SolanaRPC         string `json:"solana_rpc"`
+		FeeAccount        string `json:"fee_account"`
+		ServerURL         string `json:"server_url"`
+		BungeeAPIKey      string `json:"bungee_api_key"`
+		BungeeAffiliateID string `json:"bungee_affiliate_id"`
 	}
 	if s := strings.TrimSpace(configJSON); s != "" {
 		if err := json.Unmarshal([]byte(s), &cfg); err != nil {
@@ -34,6 +38,9 @@ func Init(configJSON string) string {
 	jup = client
 	server = srv
 	proxy = nil
+	bungeeAPIKey = cfg.BungeeAPIKey
+	bungeeAffiliateID = cfg.BungeeAffiliateID
+	bng = nil
 	tradeMu.Unlock()
 	return ""
 }

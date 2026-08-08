@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,7 +18,6 @@ import (
 )
 
 var (
-	bngOnce sync.Once
 	bng     *bungee.Client
 	lfiOnce sync.Once
 	lfi     *lifi.Client
@@ -24,7 +25,26 @@ var (
 )
 
 func autoQuoteBungee() *bungee.Client {
-	bngOnce.Do(func() { bng = bungee.NewClient() })
+	tradeMu.RLock()
+	if bng != nil {
+		client := bng
+		tradeMu.RUnlock()
+		return client
+	}
+	tradeMu.RUnlock()
+
+	tradeMu.Lock()
+	defer tradeMu.Unlock()
+	if bng == nil {
+		opts := make([]bungee.ClientOption, 0, 2)
+		if bungeeAPIKey != "" {
+			opts = append(opts, bungee.WithApiKey(bungeeAPIKey))
+		}
+		if bungeeAffiliateID != "" {
+			opts = append(opts, bungee.WithAffiliateId(bungeeAffiliateID))
+		}
+		bng = bungee.NewClient(opts...)
+	}
 	return bng
 }
 
@@ -57,14 +77,29 @@ func serverProxy() *httpc.Request {
 }
 
 type autoQuoteReq struct {
-	FromAmount    string           `json:"from_amount"`
-	SlippageBps   int              `json:"slippage_bps"`
-	FromAmountUsd float64          `json:"from_amount_usd"`
-	ToPriceUsd    float64          `json:"to_price_usd"`
-	TimeoutMs     int              `json:"timeout_ms"`
-	FeeRate       string           `json:"fee_rate,omitempty"`
-	FeeReceiver   string           `json:"fee_receiver,omitempty"`
-	Candidates    []*wireCandidate `json:"candidates"`
+	FromAmount              string           `json:"from_amount"`
+	SlippageBps             int              `json:"slippage_bps"`
+	FromAmountUsd           float64          `json:"from_amount_usd"`
+	ToPriceUsd              float64          `json:"to_price_usd"`
+	TimeoutMs               int              `json:"timeout_ms"`
+	FeeRate                 string           `json:"fee_rate,omitempty"`
+	FeeReceiver             string           `json:"fee_receiver,omitempty"`
+	UserOps                 []string         `json:"user_ops,omitempty"`
+	RefundAddress           string           `json:"refund_address,omitempty"`
+	ContractCaller          string           `json:"contract_caller,omitempty"`
+	FeeBps                  string           `json:"fee_bps,omitempty"`
+	FeeTakerAddress         string           `json:"fee_taker_address,omitempty"`
+	Refuel                  *bool            `json:"refuel,omitempty"`
+	DestinationPayload      string           `json:"destination_payload,omitempty"`
+	DestinationGasLimit     string           `json:"destination_gas_limit,omitempty"`
+	IncludeProvider         string           `json:"include_provider,omitempty"`
+	ExcludeProvider         string           `json:"exclude_provider,omitempty"`
+	Exchange                string           `json:"exchange,omitempty"`
+	IncludeQuoteRejections  *bool            `json:"include_quote_rejections,omitempty"`
+	Private                 *bool            `json:"private,omitempty"`
+	SimulatedQuotesRequired *bool            `json:"simulated_quotes_required,omitempty"`
+	SolanaSponsorAddress    string           `json:"solana_sponsor_address,omitempty"`
+	Candidates              []*wireCandidate `json:"candidates"`
 }
 
 type wireCandidate struct {
@@ -103,13 +138,28 @@ func AutoQuote(reqJSON string) string {
 		})
 	}
 	sdkReq := &dex.Request{
-		FromAmount:    req.FromAmount,
-		SlippageBps:   req.SlippageBps,
-		FromAmountUsd: req.FromAmountUsd,
-		ToPriceUsd:    req.ToPriceUsd,
-		Timeout:       time.Duration(req.TimeoutMs) * time.Millisecond,
-		FeeRate:       req.FeeRate,
-		FeeReceiver:   req.FeeReceiver,
+		FromAmount:              req.FromAmount,
+		SlippageBps:             req.SlippageBps,
+		FromAmountUsd:           req.FromAmountUsd,
+		ToPriceUsd:              req.ToPriceUsd,
+		Timeout:                 time.Duration(req.TimeoutMs) * time.Millisecond,
+		FeeRate:                 req.FeeRate,
+		FeeReceiver:             req.FeeReceiver,
+		UserOps:                 append([]string(nil), req.UserOps...),
+		RefundAddress:           req.RefundAddress,
+		ContractCaller:          req.ContractCaller,
+		FeeBps:                  req.FeeBps,
+		FeeTakerAddress:         req.FeeTakerAddress,
+		Refuel:                  req.Refuel,
+		DestinationPayload:      req.DestinationPayload,
+		DestinationGasLimit:     req.DestinationGasLimit,
+		IncludeProvider:         req.IncludeProvider,
+		ExcludeProvider:         req.ExcludeProvider,
+		Exchange:                req.Exchange,
+		IncludeQuoteRejections:  req.IncludeQuoteRejections,
+		Private:                 req.Private,
+		SimulatedQuotesRequired: req.SimulatedQuotesRequired,
+		SolanaSponsorAddress:    req.SolanaSponsorAddress,
 	}
 	engine := &dex.Engine{}
 	resp := engine.Quote(context.Background(), sdkReq, cands, dispatch)
@@ -166,6 +216,51 @@ func quoteViaServer(ctx context.Context, in *dexmodel.DexQuoteIn) (*dexmodel.Dex
 	}
 	if in.FeeReceiver != "" {
 		q.Set("feeReceiver", in.FeeReceiver)
+	}
+	if len(in.UserOps) > 0 {
+		q.Set("userOps", strings.Join(in.UserOps, ","))
+	}
+	if in.RefundAddress != "" {
+		q.Set("refundAddress", in.RefundAddress)
+	}
+	if in.ContractCaller != "" {
+		q.Set("contractCaller", in.ContractCaller)
+	}
+	if in.FeeBps != "" {
+		q.Set("feeBps", in.FeeBps)
+	}
+	if in.FeeTakerAddress != "" {
+		q.Set("feeTakerAddress", in.FeeTakerAddress)
+	}
+	if in.Refuel != nil {
+		q.Set("refuel", strconv.FormatBool(*in.Refuel))
+	}
+	if in.DestinationPayload != "" {
+		q.Set("destinationPayload", in.DestinationPayload)
+	}
+	if in.DestinationGasLimit != "" {
+		q.Set("destinationGasLimit", in.DestinationGasLimit)
+	}
+	if in.IncludeProvider != "" {
+		q.Set("includeProvider", in.IncludeProvider)
+	}
+	if in.ExcludeProvider != "" {
+		q.Set("excludeProvider", in.ExcludeProvider)
+	}
+	if in.Exchange != "" {
+		q.Set("exchange", in.Exchange)
+	}
+	if in.IncludeQuoteRejections != nil {
+		q.Set("includeQuoteRejections", strconv.FormatBool(*in.IncludeQuoteRejections))
+	}
+	if in.Private != nil {
+		q.Set("private", strconv.FormatBool(*in.Private))
+	}
+	if in.SimulatedQuotesRequired != nil {
+		q.Set("simulatedQuotesRequired", strconv.FormatBool(*in.SimulatedQuotesRequired))
+	}
+	if in.SolanaSponsorAddress != "" {
+		q.Set("solanaSponsorAddress", in.SolanaSponsorAddress)
 	}
 	var env struct {
 		Code int                   `json:"code"`

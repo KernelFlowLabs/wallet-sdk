@@ -3,21 +3,48 @@ package bungee
 import (
 	"encoding/json"
 	"fmt"
-	dexmodel "github.com/kernelflowlabs/wallet-sdk/common/dexmodel"
 	"math"
+	"strings"
+
+	dexmodel "github.com/kernelflowlabs/wallet-sdk/common/dexmodel"
+	"github.com/shopspring/decimal"
+)
+
+type UserOp string
+
+type FlexibleString string
+
+const (
+	UserOpTx          UserOp = "tx"
+	UserOpDeposit     UserOp = "deposit"
+	UserOpCEXWithdraw UserOp = "cex-withdraw"
 )
 
 type (
 	QuoteRequest struct {
-		OriginChainId      string
-		DestinationChainId string
-		InputToken         string
-		OutputToken        string
-		UserAddress        string
-		ReceiverAddress    string
-		InputAmount        string
-		Slippage           string
-		ExcludeProvider    string
+		UserOps                 []UserOp `json:"userOps"`
+		OriginChainId           string   `json:"originChainId,omitempty"`
+		DestinationChainId      string   `json:"destinationChainId"`
+		InputToken              string   `json:"inputToken"`
+		OutputToken             string   `json:"outputToken"`
+		UserAddress             string   `json:"userAddress,omitempty"`
+		ReceiverAddress         string   `json:"receiverAddress"`
+		InputAmount             string   `json:"inputAmount"`
+		Slippage                string   `json:"slippage,omitempty"`
+		RefundAddress           string   `json:"refundAddress,omitempty"`
+		ContractCaller          string   `json:"contractCaller,omitempty"`
+		FeeBps                  string   `json:"feeBps,omitempty"`
+		FeeTakerAddress         string   `json:"feeTakerAddress,omitempty"`
+		Refuel                  *bool    `json:"refuel,omitempty"`
+		DestinationPayload      string   `json:"destinationPayload,omitempty"`
+		DestinationGasLimit     string   `json:"destinationGasLimit,omitempty"`
+		IncludeProvider         string   `json:"includeProvider,omitempty"`
+		ExcludeProvider         string   `json:"excludeProvider,omitempty"`
+		Exchange                string   `json:"exchange,omitempty"`
+		IncludeQuoteRejections  *bool    `json:"includeQuoteRejections,omitempty"`
+		Private                 *bool    `json:"private,omitempty"`
+		SimulatedQuotesRequired *bool    `json:"simulatedQuotesRequired,omitempty"`
+		SolanaSponsorAddress    string   `json:"solanaSponsorAddress,omitempty"`
 	}
 	Token struct {
 		ChainId  int    `json:"chainId"`
@@ -28,113 +55,160 @@ type (
 		LogoURI  string `json:"logoURI"`
 		Icon     string `json:"icon"`
 	}
+	TokenAmount struct {
+		Token        Token   `json:"token"`
+		Amount       string  `json:"amount"`
+		MinAmountOut string  `json:"minAmountOut,omitempty"`
+		PriceInUsd   float64 `json:"priceInUsd"`
+		ValueInUsd   float64 `json:"valueInUsd"`
+	}
 	Protocol struct {
 		Name        string `json:"name"`
 		DisplayName string `json:"displayName"`
 		Icon        string `json:"icon"`
 	}
+	RouteLegDetails struct {
+		Protocol           Protocol `json:"protocol"`
+		InputTokenAddress  string   `json:"inputTokenAddress"`
+		OutputTokenAddress string   `json:"outputTokenAddress"`
+		AmountIn           string   `json:"amountIn"`
+		AmountOut          string   `json:"amountOut"`
+		MinAmountOut       string   `json:"minAmountOut"`
+		Slippage           float64  `json:"slippage"`
+	}
+	RouteDetails struct {
+		DexDetails    *RouteLegDetails `json:"dexDetails"`
+		BridgeDetails *RouteLegDetails `json:"bridgeDetails"`
+		FeeDetails    json.RawMessage  `json:"feeDetails"`
+	}
+	Approval struct {
+		SpenderAddress string `json:"spenderAddress"`
+		Amount         string `json:"amount"`
+		TokenAddress   string `json:"tokenAddress"`
+		UserAddress    string `json:"userAddress"`
+	}
+	TxData struct {
+		Kind   string          `json:"kind"`
+		Object json.RawMessage `json:"object"`
+	}
+	GasFee struct {
+		GasToken     Token          `json:"gasToken"`
+		GasLimit     FlexibleString `json:"gasLimit"`
+		GasPrice     FlexibleString `json:"gasPrice"`
+		EstimatedFee FlexibleString `json:"estimatedFee"`
+		FeeInUsd     float64        `json:"feeInUsd"`
+	}
+	StatusCheck struct {
+		Endpoint       string `json:"endpoint"`
+		Method         string `json:"method"`
+		IntervalSec    int    `json:"intervalSec"`
+		MaxDurationSec int    `json:"maxDurationSec"`
+	}
+	DepositDetails struct {
+		ChainId        int             `json:"chainId"`
+		Token          Token           `json:"token"`
+		Amount         string          `json:"amount"`
+		TransferType   string          `json:"transferType"`
+		DepositAddress string          `json:"depositAddress"`
+		Memo           json.RawMessage `json:"memo"`
+	}
+	QuoteRejection struct {
+		ProviderId string `json:"providerId"`
+		Reason     string `json:"reason"`
+	}
 	QuoteResponse struct {
-		Success    bool     `json:"success"`
-		StatusCode int      `json:"statusCode"`
-		Message    string   `json:"message,omitempty"`
-		Result     QuoteOut `json:"result"`
-	}
-	QuoteOut struct {
-		OriginChainId      int    `json:"originChainId"`
-		DestinationChainId int    `json:"destinationChainId"`
-		UserAddress        string `json:"userAddress"`
-		ReceiverAddress    string `json:"receiverAddress"`
-		Input              struct {
-			Token      Token   `json:"token"`
-			Amount     string  `json:"amount"`
-			PriceInUsd float64 `json:"priceInUsd"`
-			ValueInUsd float64 `json:"valueInUsd"`
-		} `json:"input"`
-		Routes []QuoteRoute `json:"routes"`
-	}
-	QuoteRoute struct {
-		UserOp    string `json:"userOp"`
-		QuoteId   string `json:"quoteId"`
-		ExpiresAt int64  `json:"expiresAt"`
-		Output    struct {
-			Token        Token   `json:"token"`
-			Amount       string  `json:"amount"`
-			MinAmountOut string  `json:"minAmountOut"`
-			PriceInUsd   float64 `json:"priceInUsd"`
-			ValueInUsd   float64 `json:"valueInUsd"`
-		} `json:"output"`
-		EstimatedTime     float64  `json:"estimatedTime"`
-		Slippage          float64  `json:"slippage"`
-		SuggestedSlippage float64  `json:"suggestedSlippage"`
-		RouteTags         []string `json:"routeTags"`
-		RouteDetails      struct {
-			DexDetails *struct {
-				Protocol Protocol `json:"protocol"`
-			} `json:"dexDetails"`
-			BridgeDetails *struct {
-				Protocol Protocol `json:"protocol"`
-			} `json:"bridgeDetails"`
-		} `json:"routeDetails"`
-		Approval *struct {
-			SpenderAddress string `json:"spenderAddress"`
-			Amount         string `json:"amount"`
-			TokenAddress   string `json:"tokenAddress"`
-			UserAddress    string `json:"userAddress"`
-		} `json:"approval"`
-		TxData struct {
-			Kind   string          `json:"kind"`
-			Object json.RawMessage `json:"object"`
-		} `json:"txData"`
-		GasFee struct {
-			GasToken     Token      `json:"gasToken"`
-			GasLimit     flexString `json:"gasLimit"`
-			GasPrice     flexString `json:"gasPrice"`
-			EstimatedFee flexString `json:"estimatedFee"`
-			FeeInUsd     float64    `json:"feeInUsd"`
-		} `json:"gasFee"`
-		StatusCheck struct {
-			Endpoint       string `json:"endpoint"`
-			Method         string `json:"method"`
-			IntervalSec    int    `json:"intervalSec"`
-			MaxDurationSec int    `json:"maxDurationSec"`
-		} `json:"statusCheck"`
-	}
-	evmTxObject struct {
-		ChainId int        `json:"chainId"`
-		To      string     `json:"to"`
-		Data    string     `json:"data"`
-		Value   flexString `json:"value"`
-	}
-	flexString     string
-	StatusResponse struct {
 		Success    bool      `json:"success"`
 		StatusCode int       `json:"statusCode"`
 		Message    string    `json:"message,omitempty"`
-		Result     StatusOut `json:"result"`
+		Result     *QuoteOut `json:"result"`
+	}
+	QuoteOut struct {
+		OriginChainId      int              `json:"originChainId"`
+		DestinationChainId int              `json:"destinationChainId"`
+		QuoteType          string           `json:"quoteType"`
+		UserAddress        string           `json:"userAddress"`
+		ReceiverAddress    string           `json:"receiverAddress"`
+		Input              TokenAmount      `json:"input"`
+		Routes             []QuoteRoute     `json:"routes"`
+		QuoteRejections    []QuoteRejection `json:"quoteRejections"`
+	}
+	QuoteRoute struct {
+		UserOp             string          `json:"userOp"`
+		QuoteId            string          `json:"quoteId"`
+		ExpiresAt          int64           `json:"expiresAt"`
+		Output             TokenAmount     `json:"output"`
+		EstimatedTime      float64         `json:"estimatedTime"`
+		Slippage           float64         `json:"slippage"`
+		SuggestedSlippage  float64         `json:"suggestedSlippage"`
+		RouteTags          []string        `json:"routeTags"`
+		RouteDetails       RouteDetails    `json:"routeDetails"`
+		Approval           *Approval       `json:"approval"`
+		TxData             TxData          `json:"txData"`
+		GasFee             GasFee          `json:"gasFee"`
+		StatusCheck        StatusCheck     `json:"statusCheck"`
+		ActivationRequired *bool           `json:"activationRequired"`
+		Deposit            *DepositDetails `json:"deposit"`
+		RefundAddress      string          `json:"refundAddress"`
+		SignTypedData      json.RawMessage `json:"signTypedData"`
+	}
+	evmTxObject struct {
+		ChainId int            `json:"chainId"`
+		To      string         `json:"to"`
+		Data    string         `json:"data"`
+		Value   FlexibleString `json:"value"`
+	}
+	StatusRequest struct {
+		QuoteId             string `json:"quoteId,omitempty"`
+		SrcTxHash           string `json:"srcTxHash,omitempty"`
+		IncludeQuoteDetails *bool  `json:"includeQuoteDetails,omitempty"`
+	}
+	StatusResponse struct {
+		Success    bool       `json:"success"`
+		StatusCode int        `json:"statusCode"`
+		Message    string     `json:"message,omitempty"`
+		Result     *StatusOut `json:"result"`
 	}
 	StatusOut struct {
-		QuoteId    string `json:"quoteId"`
-		UserOp     string `json:"userOp"`
-		Status     string `json:"status"`
-		StatusCode string `json:"statusCode"`
-		Origin     struct {
-			ChainId int    `json:"chainId"`
-			Status  string `json:"status"`
-			TxHash  string `json:"txHash"`
-		} `json:"origin"`
-		Destination struct {
-			ChainId int    `json:"chainId"`
-			Status  string `json:"status"`
-			TxHash  string `json:"txHash"`
-		} `json:"destination"`
-		Refund *struct {
-			ChainId int    `json:"chainId"`
-			TxHash  string `json:"txHash"`
-		} `json:"refund"`
+		QuoteId               string             `json:"quoteId"`
+		UserOp                string             `json:"userOp"`
+		Status                string             `json:"status"`
+		StatusCode            string             `json:"statusCode"`
+		Origin                StatusOrigin       `json:"origin"`
+		Destination           StatusDestination  `json:"destination"`
+		RouteDetails          StatusRouteDetails `json:"routeDetails"`
+		Refund                *StatusRefund      `json:"refund"`
+		IsDestPayloadExecuted *bool              `json:"isDestPayloadExecuted"`
+		QuoteDetails          json.RawMessage    `json:"quoteDetails"`
+	}
+	StatusOrigin struct {
+		ChainId     int           `json:"chainId"`
+		Status      string        `json:"status"`
+		TxHash      string        `json:"txHash"`
+		Timestamp   *int64        `json:"timestamp"`
+		UserAddress string        `json:"userAddress"`
+		Input       []TokenAmount `json:"input"`
+	}
+	StatusDestination struct {
+		ChainId         int           `json:"chainId"`
+		Status          string        `json:"status"`
+		TxHash          string        `json:"txHash"`
+		Timestamp       *int64        `json:"timestamp"`
+		ReceiverAddress string        `json:"receiverAddress"`
+		Output          []TokenAmount `json:"output"`
+	}
+	StatusRouteDetails struct {
+		Name    string `json:"name"`
+		LogoURI string `json:"logoURI"`
+	}
+	StatusRefund struct {
+		ChainId   int    `json:"chainId"`
+		Status    string `json:"status"`
+		TxHash    string `json:"txHash"`
+		Timestamp *int64 `json:"timestamp"`
 	}
 )
 
-func (f *flexString) UnmarshalJSON(b []byte) error {
+func (f *FlexibleString) UnmarshalJSON(b []byte) error {
 	if string(b) == "null" {
 		*f = ""
 		return nil
@@ -144,33 +218,104 @@ func (f *flexString) UnmarshalJSON(b []byte) error {
 		if err := json.Unmarshal(b, &s); err != nil {
 			return err
 		}
-		*f = flexString(s)
+		*f = FlexibleString(s)
 		return nil
 	}
-	*f = flexString(b)
+	*f = FlexibleString(b)
 	return nil
 }
 
-func (c *Client) toSocketQuoteReq(in *dexmodel.DexQuoteIn) *QuoteRequest {
-	fromChainId, ok := idChainMapperReverse[in.FromChain]
-	if !ok {
-		return nil
+func (f FlexibleString) String() string {
+	return string(f)
+}
+
+func (c *Client) toSocketQuoteReq(in *dexmodel.DexQuoteIn) (*QuoteRequest, error) {
+	if in == nil {
+		return nil, fmt.Errorf("in is nil")
+	}
+
+	userOps := make([]UserOp, 0, len(in.UserOps))
+	for _, op := range in.UserOps {
+		userOps = append(userOps, UserOp(op))
+	}
+	if len(userOps) == 0 {
+		userOps = []UserOp{UserOpTx}
+	}
+
+	var fromChainId string
+	if in.FromChain != "" {
+		var ok bool
+		fromChainId, ok = idChainMapperReverse[in.FromChain]
+		if !ok {
+			return nil, fmt.Errorf("invalid fromChain: %s", in.FromChain)
+		}
 	}
 	toChainId, ok := idChainMapperReverse[in.ToChain]
 	if !ok {
-		return nil
+		return nil, fmt.Errorf("invalid toChain: %s", in.ToChain)
 	}
+
+	feeBps, feeTakerAddress, err := socketFeeParams(in)
+	if err != nil {
+		return nil, err
+	}
+
 	return &QuoteRequest{
-		OriginChainId:      fromChainId,
-		DestinationChainId: toChainId,
-		InputToken:         in.FromToken,
-		OutputToken:        in.ToToken,
-		UserAddress:        in.FromAddress,
-		ReceiverAddress:    in.ToAddress,
-		InputAmount:        in.FromAmount,
-		Slippage:           in.Slippage,
-		ExcludeProvider:    in.ExcludeProvider,
+		UserOps:                 userOps,
+		OriginChainId:           fromChainId,
+		DestinationChainId:      toChainId,
+		InputToken:              in.FromToken,
+		OutputToken:             in.ToToken,
+		UserAddress:             in.FromAddress,
+		ReceiverAddress:         in.ToAddress,
+		InputAmount:             in.FromAmount,
+		Slippage:                in.Slippage,
+		RefundAddress:           in.RefundAddress,
+		ContractCaller:          in.ContractCaller,
+		FeeBps:                  feeBps,
+		FeeTakerAddress:         feeTakerAddress,
+		Refuel:                  in.Refuel,
+		DestinationPayload:      in.DestinationPayload,
+		DestinationGasLimit:     in.DestinationGasLimit,
+		IncludeProvider:         in.IncludeProvider,
+		ExcludeProvider:         in.ExcludeProvider,
+		Exchange:                in.Exchange,
+		IncludeQuoteRejections:  in.IncludeQuoteRejections,
+		Private:                 in.Private,
+		SimulatedQuotesRequired: in.SimulatedQuotesRequired,
+		SolanaSponsorAddress:    in.SolanaSponsorAddress,
+	}, nil
+}
+
+func socketFeeParams(in *dexmodel.DexQuoteIn) (string, string, error) {
+	feeTakerAddress := in.FeeTakerAddress
+	if feeTakerAddress == "" {
+		feeTakerAddress = in.FeeReceiver
+	} else if in.FeeReceiver != "" && !strings.EqualFold(feeTakerAddress, in.FeeReceiver) {
+		return "", "", fmt.Errorf("feeTakerAddress and feeReceiver differ")
 	}
+
+	feeBps := in.FeeBps
+	if in.FeeRate == "" {
+		return feeBps, feeTakerAddress, nil
+	}
+	feeRate, err := decimal.NewFromString(in.FeeRate)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid feeRate: %w", err)
+	}
+	if feeRate.IsNegative() {
+		return "", "", fmt.Errorf("feeRate must not be negative")
+	}
+	if feeBps != "" && !feeRate.IsZero() {
+		return "", "", fmt.Errorf("feeBps and feeRate cannot both be set")
+	}
+	if feeBps == "" && !feeRate.IsZero() {
+		feeBps = feeRate.Mul(decimal.NewFromInt(100)).String()
+	}
+	if feeBps == "" && in.FeeTakerAddress == "" {
+		feeTakerAddress = ""
+	}
+	return feeBps, feeTakerAddress, nil
 }
 
 func routeName(rt *QuoteRoute) string {
@@ -189,7 +334,8 @@ func (c *Client) toStandardQuoteRes(res *QuoteOut) *dexmodel.DexQuoteOut {
 	}
 
 	out := &dexmodel.DexQuoteOut{
-		Routes: make([]*dexmodel.DexRoute, 0, len(res.Routes)),
+		Channel: "bungee",
+		Routes:  make([]*dexmodel.DexRoute, 0, len(res.Routes)),
 	}
 	for i := range res.Routes {
 		rt := &res.Routes[i]
@@ -204,6 +350,7 @@ func (c *Client) toStandardQuoteRes(res *QuoteOut) *dexmodel.DexQuoteOut {
 			EstimatedTime:     int64(math.Round(rt.EstimatedTime)),
 			NeedBuild:         false,
 			UserOp:            rt.UserOp,
+			SignTypedData:     rt.SignTypedData,
 			GasLimit:          string(rt.GasFee.GasLimit),
 			ExpiresAt:         rt.ExpiresAt,
 		}

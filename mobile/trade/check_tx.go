@@ -5,29 +5,41 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/kernelflowlabs/wallet-sdk/common/dexmodel"
 )
 
 type checkTxReq struct {
-	Channel   string `json:"channel"`
-	Via       string `json:"via"`
-	HashType  string `json:"hash_type"`
-	Hash      string `json:"hash"`
-	FromChain string `json:"from_chain"`
-	ToChain   string `json:"to_chain"`
-	Bridge    string `json:"bridge,omitempty"`
-	TimeoutMs int    `json:"timeout_ms"`
+	Channel             string `json:"channel"`
+	Via                 string `json:"via"`
+	HashType            string `json:"hash_type"`
+	Hash                string `json:"hash"`
+	FromChain           string `json:"from_chain"`
+	ToChain             string `json:"to_chain"`
+	Bridge              string `json:"bridge,omitempty"`
+	IncludeQuoteDetails *bool  `json:"include_quote_details,omitempty"`
+	TimeoutMs           int    `json:"timeout_ms"`
 }
 
 type checkTxResp struct {
-	Channel string `json:"channel"`
-	Status  string `json:"status"`
-	ToChain string `json:"toChain,omitempty"`
-	ToHash  string `json:"toHash,omitempty"`
-	Msg     string `json:"msg,omitempty"`
-	Error   string `json:"error,omitempty"`
+	Channel               string          `json:"channel"`
+	Status                string          `json:"status"`
+	ToChain               string          `json:"toChain,omitempty"`
+	ToHash                string          `json:"toHash,omitempty"`
+	FromHash              string          `json:"fromHash,omitempty"`
+	ProviderStatus        string          `json:"providerStatus,omitempty"`
+	ProviderStatusCode    string          `json:"providerStatusCode,omitempty"`
+	OriginStatus          string          `json:"originStatus,omitempty"`
+	DestinationStatus     string          `json:"destinationStatus,omitempty"`
+	UserOp                string          `json:"userOp,omitempty"`
+	RouteName             string          `json:"routeName,omitempty"`
+	RouteLogoURI          string          `json:"routeLogoURI,omitempty"`
+	IsDestPayloadExecuted *bool           `json:"isDestPayloadExecuted,omitempty"`
+	QuoteDetails          json.RawMessage `json:"quoteDetails,omitempty"`
+	Msg                   string          `json:"msg,omitempty"`
+	Error                 string          `json:"error,omitempty"`
 }
 
 func CheckTx(reqJSON string) string {
@@ -49,12 +61,13 @@ func CheckTx(reqJSON string) string {
 		return checkTxViaServer(ctx, &req)
 	}
 	in := &dexmodel.DexCheckTxIn{
-		Channel:   req.Channel,
-		HashType:  dexmodel.DexHashType(req.HashType),
-		Hash:      req.Hash,
-		FromChain: req.FromChain,
-		ToChain:   req.ToChain,
-		Bridge:    req.Bridge,
+		Channel:             req.Channel,
+		HashType:            dexmodel.DexHashType(req.HashType),
+		Hash:                req.Hash,
+		FromChain:           req.FromChain,
+		ToChain:             req.ToChain,
+		Bridge:              req.Bridge,
+		IncludeQuoteDetails: req.IncludeQuoteDetails,
 	}
 	var out *dexmodel.DexCheckTxOut
 	var err error
@@ -79,11 +92,21 @@ func CheckTx(reqJSON string) string {
 		return marshal(&checkTxResp{Error: "empty response"})
 	}
 	return marshal(&checkTxResp{
-		Channel: out.Channel,
-		Status:  string(out.Status),
-		ToChain: out.ToChain,
-		ToHash:  out.ToHash,
-		Msg:     out.Msg,
+		Channel:               out.Channel,
+		Status:                string(out.Status),
+		ToChain:               out.ToChain,
+		ToHash:                out.ToHash,
+		FromHash:              out.FromHash,
+		ProviderStatus:        out.ProviderStatus,
+		ProviderStatusCode:    out.ProviderStatusCode,
+		OriginStatus:          out.OriginStatus,
+		DestinationStatus:     out.DestinationStatus,
+		UserOp:                out.UserOp,
+		RouteName:             out.RouteName,
+		RouteLogoURI:          out.RouteLogoURI,
+		IsDestPayloadExecuted: out.IsDestPayloadExecuted,
+		QuoteDetails:          out.QuoteDetails,
+		Msg:                   out.Msg,
 	})
 }
 
@@ -100,6 +123,9 @@ func checkTxViaServer(ctx context.Context, req *checkTxReq) string {
 	q.Set("toChain", req.ToChain)
 	if req.Bridge != "" {
 		q.Set("bridge", req.Bridge)
+	}
+	if req.IncludeQuoteDetails != nil {
+		q.Set("includeQuoteDetails", strconv.FormatBool(*req.IncludeQuoteDetails))
 	}
 	var env struct {
 		Code int    `json:"code"`
