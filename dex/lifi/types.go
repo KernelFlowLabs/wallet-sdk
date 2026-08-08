@@ -1,11 +1,11 @@
 package lifi
 
 import (
-	dexmodel "github.com/kernelflowlabs/wallet-sdk/common/dexmodel"
-	utils "github.com/kernelflowlabs/wallet-sdk/common/bigdec"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	utils "github.com/kernelflowlabs/wallet-sdk/common/bigdec"
+	dexmodel "github.com/kernelflowlabs/wallet-sdk/common/dexmodel"
 	"strconv"
 	"strings"
 
@@ -175,8 +175,16 @@ func (c *Client) toStandardStatusRes(res *StatusRes) *dexmodel.DexCheckTxOut {
 			finalStatus = dexmodel.DexStatusSucceeded
 		}
 	case "FAILED":
+		if res.Substatus == "REFUNDED" {
+			finalStatus = dexmodel.DexStatusRefunded
+		} else {
+			finalStatus = dexmodel.DexStatusFailed
+		}
+	case "INVALID":
 		finalStatus = dexmodel.DexStatusFailed
 	case "PENDING", "NOT_FOUND":
+		// LI.FI defines NOT_FOUND as either unknown or not yet mined, so keep
+		// polling rather than treating it as a terminal failure.
 		finalStatus = dexmodel.DexStatusPending
 	default:
 		finalStatus = dexmodel.DexStatusPending
@@ -186,6 +194,7 @@ func (c *Client) toStandardStatusRes(res *StatusRes) *dexmodel.DexCheckTxOut {
 		Channel: "lifi",
 		Status:  finalStatus,
 		ToHash:  res.Receiving.TxHash,
+		Msg:     res.SubstatusMsg,
 	}
 }
 

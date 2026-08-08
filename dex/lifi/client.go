@@ -1,11 +1,12 @@
 package lifi
 
 import (
-	dexmodel "github.com/kernelflowlabs/wallet-sdk/common/dexmodel"
-	"github.com/kernelflowlabs/wallet-sdk/common/httpc"
 	"context"
 	"fmt"
+	dexmodel "github.com/kernelflowlabs/wallet-sdk/common/dexmodel"
+	"github.com/kernelflowlabs/wallet-sdk/common/httpc"
 	"net/url"
+	"strconv"
 )
 
 type Client struct {
@@ -106,20 +107,33 @@ func (c *Client) Quote(ctx context.Context, in *dexmodel.DexQuoteIn) (*dexmodel.
 }
 
 func (c *Client) Status(ctx context.Context, in *dexmodel.DexCheckTxIn) (*dexmodel.DexCheckTxOut, error) {
+	if in == nil {
+		return nil, fmt.Errorf("in is nil")
+	} else if in.Hash == "" {
+		return nil, fmt.Errorf("hash (txHash) is empty")
+	}
+
 	path := "v1/status"
 
 	query := url.Values{}
 	query.Set("txHash", in.Hash)
-	fromChainId, ok := idChainMapperReverse[in.FromChain]
-	if !ok {
-		return nil, fmt.Errorf("invalid fromChain")
+	if in.FromChain != "" {
+		fromChainID, ok := idChainMapperReverse[in.FromChain]
+		if !ok {
+			return nil, fmt.Errorf("invalid fromChain")
+		}
+		query.Set("fromChain", fromChainID)
 	}
-	query.Set("fromChain", fromChainId)
-	toChainId, ok := idChainMapperReverse[in.ToChain]
-	if !ok {
-		return nil, fmt.Errorf("invalid toChain")
+	if in.ToChain != "" {
+		toChainID, ok := idChainMapperReverse[in.ToChain]
+		if !ok {
+			return nil, fmt.Errorf("invalid toChain")
+		}
+		query.Set("toChain", toChainID)
 	}
-	query.Set("toChain", toChainId)
+	if in.Bridge != "" {
+		query.Set("bridge", in.Bridge)
+	}
 	out := &StatusRes{}
 	err := c.client.Get(ctx, out, path, query)
 	if err != nil {
@@ -130,6 +144,9 @@ func (c *Client) Status(ctx context.Context, in *dexmodel.DexCheckTxIn) (*dexmod
 		return nil, fmt.Errorf("fail to get status, txHash=%s", in.Hash)
 	}
 	res.ToChain = in.ToChain
+	if res.ToChain == "" && out.Receiving.ChainID != 0 {
+		res.ToChain = idChainMapper[strconv.Itoa(out.Receiving.ChainID)]
+	}
 	return res, nil
 }
 

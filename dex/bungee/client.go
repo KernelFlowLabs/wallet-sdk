@@ -89,7 +89,10 @@ func (c *Client) Status(ctx context.Context, in *dexmodel.DexCheckTxIn) (*dexmod
 	query := url.Values{}
 	query.Set("quoteId", in.Hash)
 
-	out := &dexmodel.DexCheckTxOut{}
+	out := &dexmodel.DexCheckTxOut{
+		Channel: "bungee",
+		ToChain: in.ToChain,
+	}
 	res := &StatusResponse{}
 	err := c.client.Get(ctx, res, path, query)
 	if err != nil {
@@ -106,14 +109,15 @@ func (c *Client) Status(ctx context.Context, in *dexmodel.DexCheckTxIn) (*dexmod
 		return nil, fmt.Errorf("fail to get status, quoteId=%s, statusCode=%d, msg=%s", in.Hash, res.StatusCode, res.Message)
 	}
 
-	switch res.Result.StatusCode {
+	// Socket documents Result.Status as the lifecycle state. StatusCode is a
+	// more detailed outcome (for example, FULFILLED) and must not drive the
+	// terminal-state mapping.
+	switch res.Result.Status {
 	case "COMPLETED":
 		out.Status = dexmodel.DexStatusSucceeded
-		out.ToChain = in.ToChain
 		out.ToHash = res.Result.Destination.TxHash
 	case "REFUNDED":
 		out.Status = dexmodel.DexStatusRefunded
-		out.ToChain = in.ToChain
 		if res.Result.Refund != nil && res.Result.Refund.TxHash != "" {
 			out.ToHash = res.Result.Refund.TxHash
 		} else {
@@ -121,6 +125,8 @@ func (c *Client) Status(ctx context.Context, in *dexmodel.DexCheckTxIn) (*dexmod
 		}
 	case "FAILED", "EXPIRED":
 		out.Status = dexmodel.DexStatusFailed
+	case "PENDING", "IN_PROGRESS":
+		out.Status = dexmodel.DexStatusPending
 	default:
 		out.Status = dexmodel.DexStatusPending
 	}
