@@ -16,6 +16,10 @@ type (
 		FeeReceiver      string `json:"feeReceiver,omitempty"`
 		FromValueUsd     string `json:"fromValueUsd,omitempty"`
 		GasOnDestination string `json:"gasOnDestination,omitempty"`
+		// ExcludeProvider is a comma-separated list of Socket provider IDs.
+		// For cross-chain quotes Socket interprets these as bridge IDs (for
+		// example "across"); for same-chain quotes they are DEX IDs.
+		ExcludeProvider string `json:"excludeProvider,omitempty"`
 	}
 	DexQuoteOut struct {
 		Channel string      `json:"channel"`

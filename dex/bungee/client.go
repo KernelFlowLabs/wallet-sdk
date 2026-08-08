@@ -63,6 +63,9 @@ func (c *Client) Quote(ctx context.Context, in *dexmodel.DexQuoteIn) (*dexmodel.
 	if req.Slippage != "" {
 		query.Set("slippage", req.Slippage)
 	}
+	if req.ExcludeProvider != "" {
+		query.Set("excludeProvider", req.ExcludeProvider)
+	}
 
 	out := &QuoteResponse{}
 	err := c.client.Get(ctx, out, path, query)

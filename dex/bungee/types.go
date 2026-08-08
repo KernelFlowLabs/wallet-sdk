@@ -1,9 +1,9 @@
 package bungee
 
 import (
-	dexmodel "github.com/kernelflowlabs/wallet-sdk/common/dexmodel"
 	"encoding/json"
 	"fmt"
+	dexmodel "github.com/kernelflowlabs/wallet-sdk/common/dexmodel"
 	"math"
 )
 
@@ -17,6 +17,7 @@ type (
 		ReceiverAddress    string
 		InputAmount        string
 		Slippage           string
+		ExcludeProvider    string
 	}
 	Token struct {
 		ChainId  int    `json:"chainId"`
@@ -104,7 +105,7 @@ type (
 		Data    string     `json:"data"`
 		Value   flexString `json:"value"`
 	}
-	flexString string
+	flexString     string
 	StatusResponse struct {
 		Success    bool      `json:"success"`
 		StatusCode int       `json:"statusCode"`
@@ -168,6 +169,7 @@ func (c *Client) toSocketQuoteReq(in *dexmodel.DexQuoteIn) *QuoteRequest {
 		ReceiverAddress:    in.ToAddress,
 		InputAmount:        in.FromAmount,
 		Slippage:           in.Slippage,
+		ExcludeProvider:    in.ExcludeProvider,
 	}
 }
 
