@@ -88,6 +88,7 @@ type Route struct {
 	PriceImpactPct  float64   `json:"priceImpactPct,omitempty"`
 	LiquidityUsd    float64   `json:"liquidityUsd,omitempty"`
 	EstSeconds      int64     `json:"estSeconds,omitempty"`
+	RouteTags       []string  `json:"routeTags,omitempty"`
 	Warnings        []Warning `json:"warnings,omitempty"`
 	Reason          string    `json:"reason,omitempty"`
 }
@@ -265,6 +266,7 @@ func (e *Engine) Quote(ctx context.Context, req *Request, cands []*Candidate, qu
 			PriceImpactPct:  best.PriceImpactPct,
 			LiquidityUsd:    r.cand.LiquidityUsd,
 			EstSeconds:      best.EstimatedTime,
+			RouteTags:       append([]string(nil), best.RouteTags...),
 			Warnings:        append([]Warning(nil), best.Warnings...),
 			Reason:          ReasonFor(r.cand, channel),
 		}

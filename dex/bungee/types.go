@@ -352,6 +352,7 @@ func (c *Client) toStandardQuoteRes(res *QuoteOut) *dexmodel.DexQuoteOut {
 			UserOp:            rt.UserOp,
 			SignTypedData:     rt.SignTypedData,
 			GasLimit:          string(rt.GasFee.GasLimit),
+			RouteTags:         append([]string(nil), rt.RouteTags...),
 			ExpiresAt:         rt.ExpiresAt,
 		}
 		switch rt.TxData.Kind {

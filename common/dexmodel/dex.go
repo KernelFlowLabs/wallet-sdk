@@ -58,6 +58,7 @@ type (
 		PriceImpactPct    float64         `json:"priceImpactPct,omitempty"`
 		Warnings          []DexWarning    `json:"warnings,omitempty"`
 		GasLimit          string          `json:"gasLimit,omitempty"`
+		RouteTags         []string        `json:"routeTags,omitempty"`
 		// ExpiresAt is the route TTL as a unix timestamp; 0 when unknown.
 		ExpiresAt int64 `json:"expiresAt,omitempty"`
 	}
