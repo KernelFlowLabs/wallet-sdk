@@ -2,6 +2,7 @@ package univ3
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -12,9 +13,19 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+const (
+	defaultDeadlineTTL = 60 * time.Second
+	maxMulticallDepth  = 8
+)
+
 var (
-	parsedV1 abi.ABI
-	parsedV2 abi.ABI
+	ErrInvalidRouterVersion = errors.New("univ3: router version must be 1 or 2")
+	ErrNoSwapFound          = errors.New("univ3: no exactInputSingle found")
+	ErrUnsupportedSelector  = errors.New("univ3: unsupported selector")
+
+	parsedV1                 abi.ABI
+	parsedV2                 abi.ABI
+	parsedMulticallBlockhash abi.ABI
 )
 
 func init() {
@@ -27,207 +38,388 @@ func init() {
 	if err != nil {
 		panic(fmt.Sprintf("univ3: failed to parse SwapRouter02 ABI: %v", err))
 	}
-}
-
-// IsUniV3Router returns (routerVersion, true) when addr is a known UniV3 router.
-func IsUniV3Router(addr string) (int, bool) {
-	lower := strings.ToLower(addr)
-	switch lower {
-	case strings.ToLower(AddrSwapRouterV1):
-		return 1, true
-	case strings.ToLower(AddrSwapRouter02):
-		return 2, true
-	}
-	return 0, false
-}
-
-// DecodeSwapInfo decodes a UniV3 exactInputSingle calldata (direct call or inside multicall).
-// routerVer is 1 or 2 and is used only when the selector is multicall.
-func DecodeSwapInfo(calldata []byte, routerVer int) (*SwapInfo, error) {
-	if len(calldata) < 4 {
-		return nil, fmt.Errorf("calldata too short (%d bytes)", len(calldata))
-	}
-	sel := hex.EncodeToString(calldata[:4])
-	switch sel {
-	case SelectorExactInputSingleV1:
-		return decodeV1(calldata)
-	case SelectorExactInputSingleV2:
-		return decodeV2(calldata)
-	case SelectorMulticall, SelectorMulticallDeadline:
-		return decodeMulticall(calldata, routerVer)
-	default:
-		return nil, fmt.Errorf("unsupported selector: %s", sel)
-	}
-}
-
-// EncodeExactInputSingle builds calldata for exactInputSingle on the given router version.
-// For V1, deadline defaults to now+60s when nil.
-func EncodeExactInputSingle(info *SwapInfo, recipient common.Address, deadline *big.Int, routerVer int) ([]byte, error) {
-	if routerVer == 2 {
-		return encodeV2(info, recipient)
-	}
-	return encodeV1(info, recipient, deadline)
-}
-
-// ---------- decode helpers ----------
-
-func decodeV1(calldata []byte) (*SwapInfo, error) {
-	method := parsedV1.Methods["exactInputSingle"]
-	vals, err := method.Inputs.Unpack(calldata[4:])
+	parsedMulticallBlockhash, err = abi.JSON(strings.NewReader(abiMulticallBlockhash))
 	if err != nil {
-		return nil, fmt.Errorf("unpack v1 exactInputSingle: %w", err)
+		panic(fmt.Sprintf("univ3: failed to parse blockhash multicall ABI: %v", err))
 	}
-	if len(vals) != 1 {
-		return nil, fmt.Errorf("unexpected arg count %d", len(vals))
+}
+
+// IsUniV3Router recognizes the two canonical legacy V3 router deployments.
+// It does not recognize Universal Router addresses.
+func IsUniV3Router(addr string) (int, bool) {
+	addr = strings.TrimSpace(addr)
+	if len(addr) != 42 || !common.IsHexAddress(addr) {
+		return 0, false
 	}
-	info, err := extractSwapFields(vals[0], true)
+	switch common.HexToAddress(addr) {
+	case common.HexToAddress(AddrSwapRouterV1):
+		return RouterVersionV1, true
+	case common.HexToAddress(AddrSwapRouter02):
+		return RouterVersion02, true
+	default:
+		return 0, false
+	}
+}
+
+// DecodeSwapInfo decodes exactly one exactInputSingle call. It rejects a
+// multicall containing multiple swaps so callers cannot accidentally inspect
+// only part of a transaction. Use DecodeSwapInfos when multiple swaps are
+// expected.
+func DecodeSwapInfo(calldata []byte, routerVer int) (*SwapInfo, error) {
+	infos, err := DecodeSwapInfos(calldata, routerVer)
 	if err != nil {
 		return nil, err
 	}
-	info.RouterVersion = 1
+	if len(infos) != 1 {
+		return nil, fmt.Errorf("univ3: calldata contains %d swaps; use DecodeSwapInfos", len(infos))
+	}
+	return infos[0], nil
+}
+
+// DecodeSwapInfos decodes exactInputSingle calls directly or recursively from
+// all three legacy multicall overloads. routerVer is inferred for direct swap
+// calls and must be 1 or 2 for multicalls.
+func DecodeSwapInfos(calldata []byte, routerVer int) ([]*SwapInfo, error) {
+	return decodeSwapInfos(calldata, routerVer, 0)
+}
+
+func decodeSwapInfos(calldata []byte, routerVer, depth int) ([]*SwapInfo, error) {
+	if len(calldata) < 4 {
+		return nil, fmt.Errorf("univ3: calldata too short (%d bytes)", len(calldata))
+	}
+	if depth > maxMulticallDepth {
+		return nil, fmt.Errorf("univ3: multicall nesting exceeds %d", maxMulticallDepth)
+	}
+
+	selector := hex.EncodeToString(calldata[:4])
+	switch selector {
+	case SelectorExactInputSingleV1:
+		info, err := decodeV1(calldata)
+		if err != nil {
+			return nil, err
+		}
+		return []*SwapInfo{info}, nil
+	case SelectorExactInputSingleV2:
+		info, err := decodeV2(calldata)
+		if err != nil {
+			return nil, err
+		}
+		return []*SwapInfo{info}, nil
+	case SelectorMulticall, SelectorMulticallDeadline, SelectorMulticallBlockhash:
+		if err := validateRouterVersion(routerVer); err != nil {
+			return nil, err
+		}
+		if selector != SelectorMulticall && routerVer != RouterVersion02 {
+			return nil, fmt.Errorf("univ3: selector %s requires SwapRouter02", selector)
+		}
+		calls, deadline, blockhash, err := decodeMulticallEnvelope(calldata, selector)
+		if err != nil {
+			return nil, err
+		}
+		infos := make([]*SwapInfo, 0, len(calls))
+		for index, inner := range calls {
+			if !hasSupportedSelector(inner) {
+				continue
+			}
+			innerInfos, err := decodeSwapInfos(inner, routerVer, depth+1)
+			if err != nil {
+				if errors.Is(err, ErrNoSwapFound) {
+					continue
+				}
+				return nil, fmt.Errorf("univ3: multicall item %d: %w", index, err)
+			}
+			infos = append(infos, innerInfos...)
+		}
+		if len(infos) == 0 {
+			return nil, ErrNoSwapFound
+		}
+		for _, info := range infos {
+			if info.RouterVersion != routerVer {
+				return nil, fmt.Errorf("univ3: router version %d contains version %d swap calldata", routerVer, info.RouterVersion)
+			}
+			if deadline != nil {
+				if info.Deadline == nil || deadline.Cmp(info.Deadline) < 0 {
+					info.Deadline = new(big.Int).Set(deadline)
+				}
+			}
+			if blockhash != nil {
+				if info.PreviousBlockhash != nil && *info.PreviousBlockhash != *blockhash {
+					return nil, fmt.Errorf("univ3: nested multicalls require different previous block hashes")
+				}
+				if info.PreviousBlockhash == nil {
+					hashCopy := *blockhash
+					info.PreviousBlockhash = &hashCopy
+				}
+			}
+		}
+		return infos, nil
+	default:
+		return nil, fmt.Errorf("%w: %s", ErrUnsupportedSelector, selector)
+	}
+}
+
+func hasSupportedSelector(calldata []byte) bool {
+	if len(calldata) < 4 {
+		return false
+	}
+	switch hex.EncodeToString(calldata[:4]) {
+	case SelectorExactInputSingleV1, SelectorExactInputSingleV2,
+		SelectorMulticall, SelectorMulticallDeadline, SelectorMulticallBlockhash:
+		return true
+	default:
+		return false
+	}
+}
+
+func decodeMulticallEnvelope(calldata []byte, selector string) ([][]byte, *big.Int, *common.Hash, error) {
+	var method abi.Method
+	switch selector {
+	case SelectorMulticall:
+		method = parsedV1.Methods["multicall"]
+	case SelectorMulticallDeadline:
+		method = parsedV2.Methods["multicall"]
+	case SelectorMulticallBlockhash:
+		method = parsedMulticallBlockhash.Methods["multicall"]
+	default:
+		return nil, nil, nil, fmt.Errorf("%w: %s", ErrUnsupportedSelector, selector)
+	}
+
+	values, err := method.Inputs.Unpack(calldata[4:])
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("univ3: unpack multicall %s: %w", selector, err)
+	}
+	if selector == SelectorMulticall {
+		if len(values) != 1 {
+			return nil, nil, nil, fmt.Errorf("univ3: multicall has %d arguments", len(values))
+		}
+		calls, ok := values[0].([][]byte)
+		if !ok {
+			return nil, nil, nil, fmt.Errorf("univ3: multicall data has type %T", values[0])
+		}
+		return calls, nil, nil, nil
+	}
+	if len(values) != 2 {
+		return nil, nil, nil, fmt.Errorf("univ3: multicall has %d arguments", len(values))
+	}
+	calls, ok := values[1].([][]byte)
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("univ3: multicall data has type %T", values[1])
+	}
+	if selector == SelectorMulticallDeadline {
+		deadline, ok := values[0].(*big.Int)
+		if !ok || deadline == nil {
+			return nil, nil, nil, fmt.Errorf("univ3: multicall deadline has type %T", values[0])
+		}
+		return calls, deadline, nil, nil
+	}
+	rawHash, ok := values[0].([32]byte)
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("univ3: multicall blockhash has type %T", values[0])
+	}
+	hash := common.BytesToHash(rawHash[:])
+	return calls, nil, &hash, nil
+}
+
+// EncodeExactInputSingle creates deadline-protected calldata. SwapRouter V1
+// carries the deadline in its tuple; SwapRouter02 is wrapped in
+// multicall(uint256,bytes[]). A nil deadline defaults to now plus 60 seconds.
+func EncodeExactInputSingle(info *SwapInfo, recipient common.Address, deadline *big.Int, routerVer int) ([]byte, error) {
+	if err := validateRouterVersion(routerVer); err != nil {
+		return nil, err
+	}
+	if err := validateSwapInfo(info, recipient, routerVer); err != nil {
+		return nil, err
+	}
+	deadline, err := effectiveDeadline(deadline)
+	if err != nil {
+		return nil, err
+	}
+	if routerVer == RouterVersionV1 {
+		return encodeV1(info, recipient, deadline)
+	}
+	inner, err := encodeV2(info, recipient)
+	if err != nil {
+		return nil, err
+	}
+	return parsedV2.Pack("multicall", deadline, [][]byte{inner})
+}
+
+// EncodeExactInputSingleCall returns the raw router method call. For
+// SwapRouter02 the deadline cannot be represented in the inner tuple and is
+// intentionally absent; prefer EncodeExactInputSingle for transaction data.
+func EncodeExactInputSingleCall(info *SwapInfo, recipient common.Address, deadline *big.Int, routerVer int) ([]byte, error) {
+	if err := validateRouterVersion(routerVer); err != nil {
+		return nil, err
+	}
+	if err := validateSwapInfo(info, recipient, routerVer); err != nil {
+		return nil, err
+	}
+	if routerVer == RouterVersionV1 {
+		deadline, err := effectiveDeadline(deadline)
+		if err != nil {
+			return nil, err
+		}
+		return encodeV1(info, recipient, deadline)
+	}
+	if deadline != nil {
+		return nil, fmt.Errorf("univ3: raw SwapRouter02 exactInputSingle has no deadline; use EncodeExactInputSingle")
+	}
+	return encodeV2(info, recipient)
+}
+
+func validateRouterVersion(routerVer int) error {
+	if routerVer != RouterVersionV1 && routerVer != RouterVersion02 {
+		return ErrInvalidRouterVersion
+	}
+	return nil
+}
+
+func validateSwapInfo(info *SwapInfo, recipient common.Address, routerVer int) error {
+	if info == nil {
+		return fmt.Errorf("univ3: nil swap info")
+	}
+	if info.RouterVersion != 0 && info.RouterVersion != routerVer {
+		return fmt.Errorf("univ3: swap info router version %d does not match %d", info.RouterVersion, routerVer)
+	}
+	if info.TokenIn == (common.Address{}) || info.TokenOut == (common.Address{}) || info.TokenIn == info.TokenOut {
+		return fmt.Errorf("univ3: invalid token pair")
+	}
+	if recipient == (common.Address{}) {
+		return fmt.Errorf("univ3: zero recipient")
+	}
+	if info.Fee > MaxUint24 {
+		return fmt.Errorf("univ3: fee exceeds uint24")
+	}
+	if info.AmountIn == nil || info.AmountIn.Sign() <= 0 || info.AmountIn.BitLen() > 256 {
+		return fmt.Errorf("univ3: amountIn must be a positive uint256")
+	}
+	if info.AmountOutMinimum == nil || info.AmountOutMinimum.Sign() < 0 || info.AmountOutMinimum.BitLen() > 256 {
+		return fmt.Errorf("univ3: amountOutMinimum must be a uint256")
+	}
+	if info.SqrtPriceLimitX96 == nil || info.SqrtPriceLimitX96.Sign() < 0 || info.SqrtPriceLimitX96.BitLen() > 160 {
+		return fmt.Errorf("univ3: sqrtPriceLimitX96 must be a uint160")
+	}
+	return nil
+}
+
+func effectiveDeadline(deadline *big.Int) (*big.Int, error) {
+	if deadline == nil {
+		return big.NewInt(time.Now().Add(defaultDeadlineTTL).Unix()), nil
+	}
+	if deadline.Sign() <= 0 || deadline.BitLen() > 256 {
+		return nil, fmt.Errorf("univ3: deadline must be a positive uint256")
+	}
+	return new(big.Int).Set(deadline), nil
+}
+
+func decodeV1(calldata []byte) (*SwapInfo, error) {
+	method := parsedV1.Methods["exactInputSingle"]
+	values, err := method.Inputs.Unpack(calldata[4:])
+	if err != nil {
+		return nil, fmt.Errorf("univ3: unpack v1 exactInputSingle: %w", err)
+	}
+	if len(values) != 1 {
+		return nil, fmt.Errorf("univ3: unexpected v1 argument count %d", len(values))
+	}
+	info, err := extractSwapFields(values[0], true)
+	if err != nil {
+		return nil, err
+	}
+	info.RouterVersion = RouterVersionV1
 	return info, nil
 }
 
 func decodeV2(calldata []byte) (*SwapInfo, error) {
 	method := parsedV2.Methods["exactInputSingle"]
-	vals, err := method.Inputs.Unpack(calldata[4:])
+	values, err := method.Inputs.Unpack(calldata[4:])
 	if err != nil {
-		return nil, fmt.Errorf("unpack v2 exactInputSingle: %w", err)
+		return nil, fmt.Errorf("univ3: unpack v2 exactInputSingle: %w", err)
 	}
-	if len(vals) != 1 {
-		return nil, fmt.Errorf("unexpected arg count %d", len(vals))
+	if len(values) != 1 {
+		return nil, fmt.Errorf("univ3: unexpected v2 argument count %d", len(values))
 	}
-	info, err := extractSwapFields(vals[0], false)
+	info, err := extractSwapFields(values[0], false)
 	if err != nil {
 		return nil, err
 	}
-	info.RouterVersion = 2
+	info.RouterVersion = RouterVersion02
 	return info, nil
 }
 
-func decodeMulticall(calldata []byte, routerVer int) (*SwapInfo, error) {
-	sel := hex.EncodeToString(calldata[:4])
-	var innerCalls [][]byte
-
-	if sel == SelectorMulticall {
-		// multicall(bytes[]) – exists on both V1 and V2; V1 ABI is fine to parse either
-		method := parsedV1.Methods["multicall"]
-		vals, err := method.Inputs.Unpack(calldata[4:])
-		if err != nil {
-			return nil, fmt.Errorf("unpack multicall(bytes[]): %w", err)
-		}
-		raw, ok := vals[0].([][]byte)
-		if !ok {
-			return nil, fmt.Errorf("multicall: unexpected data type %T", vals[0])
-		}
-		innerCalls = raw
-	} else {
-		// multicall(uint256 deadline, bytes[]) – SwapRouter02 only
-		method := parsedV2.Methods["multicall"]
-		vals, err := method.Inputs.Unpack(calldata[4:])
-		if err != nil {
-			return nil, fmt.Errorf("unpack multicall(uint256,bytes[]): %w", err)
-		}
-		if len(vals) < 2 {
-			return nil, fmt.Errorf("multicall: too few args (%d)", len(vals))
-		}
-		raw, ok := vals[1].([][]byte)
-		if !ok {
-			return nil, fmt.Errorf("multicall: unexpected data type %T", vals[1])
-		}
-		innerCalls = raw
-	}
-
-	for _, inner := range innerCalls {
-		info, err := DecodeSwapInfo(inner, routerVer)
-		if err == nil {
-			return info, nil
-		}
-	}
-	return nil, fmt.Errorf("no exactInputSingle found in multicall (%d calls)", len(innerCalls))
-}
-
-// extractSwapFields reads the ABI-unpacked tuple struct via reflection.
-// go-ethereum creates an anonymous struct whose fields are PascalCase versions of the ABI component names.
-// uint24 (fee) maps to uint32; uint160 (sqrtPriceLimitX96) maps to *big.Int.
-func extractSwapFields(v interface{}, hasDeadline bool) (*SwapInfo, error) {
-	rv := reflect.ValueOf(v)
+// extractSwapFields reads the ABI-unpacked anonymous tuple struct.
+func extractSwapFields(value any, hasDeadline bool) (*SwapInfo, error) {
+	rv := reflect.ValueOf(value)
 	if rv.Kind() == reflect.Ptr {
 		rv = rv.Elem()
 	}
 	if rv.Kind() != reflect.Struct {
-		return nil, fmt.Errorf("expected struct, got %T", v)
+		return nil, fmt.Errorf("univ3: expected tuple struct, got %T", value)
 	}
 
-	addr := func(name string) (common.Address, error) {
-		f := rv.FieldByName(name)
-		if !f.IsValid() {
-			return common.Address{}, fmt.Errorf("field %s not found", name)
+	addressField := func(name string) (common.Address, error) {
+		field := rv.FieldByName(name)
+		if !field.IsValid() {
+			return common.Address{}, fmt.Errorf("univ3: field %s not found", name)
 		}
-		a, ok := f.Interface().(common.Address)
+		address, ok := field.Interface().(common.Address)
 		if !ok {
-			return common.Address{}, fmt.Errorf("field %s: expected common.Address, got %T", name, f.Interface())
+			return common.Address{}, fmt.Errorf("univ3: field %s has type %T", name, field.Interface())
 		}
-		return a, nil
+		return address, nil
+	}
+	bigIntField := func(name string) (*big.Int, error) {
+		field := rv.FieldByName(name)
+		if !field.IsValid() {
+			return nil, fmt.Errorf("univ3: field %s not found", name)
+		}
+		number, ok := field.Interface().(*big.Int)
+		if !ok || number == nil {
+			return nil, fmt.Errorf("univ3: field %s has type %T", name, field.Interface())
+		}
+		return number, nil
 	}
 
-	bigint := func(name string) (*big.Int, error) {
-		f := rv.FieldByName(name)
-		if !f.IsValid() {
-			return nil, fmt.Errorf("field %s not found", name)
-		}
-		n, ok := f.Interface().(*big.Int)
-		if !ok {
-			return nil, fmt.Errorf("field %s: expected *big.Int, got %T", name, f.Interface())
-		}
-		if n == nil {
-			return big.NewInt(0), nil
-		}
-		return n, nil
-	}
-
-	tokenIn, err := addr("TokenIn")
+	tokenIn, err := addressField("TokenIn")
 	if err != nil {
 		return nil, err
 	}
-	tokenOut, err := addr("TokenOut")
+	tokenOut, err := addressField("TokenOut")
 	if err != nil {
 		return nil, err
 	}
-	recipient, err := addr("Recipient")
+	recipient, err := addressField("Recipient")
 	if err != nil {
 		return nil, err
 	}
-	amountIn, err := bigint("AmountIn")
+	amountIn, err := bigIntField("AmountIn")
 	if err != nil {
 		return nil, err
 	}
-	amountOutMin, err := bigint("AmountOutMinimum")
+	amountOutMinimum, err := bigIntField("AmountOutMinimum")
 	if err != nil {
 		return nil, err
 	}
-	sqrtLimit, err := bigint("SqrtPriceLimitX96")
+	sqrtPriceLimitX96, err := bigIntField("SqrtPriceLimitX96")
 	if err != nil {
 		return nil, err
 	}
 
-	// Fee: uint24 → uint32 in go-ethereum; handle *big.Int fallback just in case
 	feeField := rv.FieldByName("Fee")
 	if !feeField.IsValid() {
-		return nil, fmt.Errorf("field Fee not found")
+		return nil, fmt.Errorf("univ3: field Fee not found")
 	}
 	var fee uint32
 	switch feeField.Kind() {
 	case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uint:
 		fee = uint32(feeField.Uint())
 	case reflect.Ptr:
-		n, ok := feeField.Interface().(*big.Int)
-		if !ok || n == nil {
-			return nil, fmt.Errorf("field Fee: unexpected type %T", feeField.Interface())
+		number, ok := feeField.Interface().(*big.Int)
+		if !ok || number == nil || number.Sign() < 0 || number.BitLen() > 24 {
+			return nil, fmt.Errorf("univ3: invalid Fee value")
 		}
-		fee = uint32(n.Uint64())
+		fee = uint32(number.Uint64())
 	default:
-		return nil, fmt.Errorf("field Fee: unexpected kind %s", feeField.Kind())
+		return nil, fmt.Errorf("univ3: field Fee has kind %s", feeField.Kind())
 	}
 
 	info := &SwapInfo{
@@ -236,38 +428,30 @@ func extractSwapFields(v interface{}, hasDeadline bool) (*SwapInfo, error) {
 		Fee:               fee,
 		Recipient:         recipient,
 		AmountIn:          amountIn,
-		AmountOutMinimum:  amountOutMin,
-		SqrtPriceLimitX96: sqrtLimit,
+		AmountOutMinimum:  amountOutMinimum,
+		SqrtPriceLimitX96: sqrtPriceLimitX96,
 	}
-
 	if hasDeadline {
-		dl, err := bigint("Deadline")
+		info.Deadline, err = bigIntField("Deadline")
 		if err != nil {
 			return nil, err
 		}
-		info.Deadline = dl
 	}
 	return info, nil
 }
 
-// ---------- encode helpers ----------
-
 func encodeV1(info *SwapInfo, recipient common.Address, deadline *big.Int) ([]byte, error) {
-	if deadline == nil {
-		deadline = big.NewInt(time.Now().Unix() + 60)
-	}
-	// Local struct whose field names match the ABI component names (case-insensitive).
 	type params struct {
 		TokenIn           common.Address
 		TokenOut          common.Address
-		Fee               *big.Int // go-ethereum Pack accepts *big.Int for uint24
+		Fee               *big.Int
 		Recipient         common.Address
 		Deadline          *big.Int
 		AmountIn          *big.Int
 		AmountOutMinimum  *big.Int
 		SqrtPriceLimitX96 *big.Int
 	}
-	p := params{
+	return parsedV1.Pack("exactInputSingle", params{
 		TokenIn:           info.TokenIn,
 		TokenOut:          info.TokenOut,
 		Fee:               new(big.Int).SetUint64(uint64(info.Fee)),
@@ -276,8 +460,7 @@ func encodeV1(info *SwapInfo, recipient common.Address, deadline *big.Int) ([]by
 		AmountIn:          info.AmountIn,
 		AmountOutMinimum:  info.AmountOutMinimum,
 		SqrtPriceLimitX96: info.SqrtPriceLimitX96,
-	}
-	return parsedV1.Pack("exactInputSingle", p)
+	})
 }
 
 func encodeV2(info *SwapInfo, recipient common.Address) ([]byte, error) {
@@ -290,7 +473,7 @@ func encodeV2(info *SwapInfo, recipient common.Address) ([]byte, error) {
 		AmountOutMinimum  *big.Int
 		SqrtPriceLimitX96 *big.Int
 	}
-	p := params{
+	return parsedV2.Pack("exactInputSingle", params{
 		TokenIn:           info.TokenIn,
 		TokenOut:          info.TokenOut,
 		Fee:               new(big.Int).SetUint64(uint64(info.Fee)),
@@ -298,6 +481,5 @@ func encodeV2(info *SwapInfo, recipient common.Address) ([]byte, error) {
 		AmountIn:          info.AmountIn,
 		AmountOutMinimum:  info.AmountOutMinimum,
 		SqrtPriceLimitX96: info.SqrtPriceLimitX96,
-	}
-	return parsedV2.Pack("exactInputSingle", p)
+	})
 }

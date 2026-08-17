@@ -1,16 +1,25 @@
 package pancakeswap
 
-// TokenInfo mirrors Uniswap's TokenInfo shape — PancakeSwap V3's
-// subgraph schema is forked from Uniswap V3 so field semantics are
-// identical (derivedBNB instead of derivedETH for the chain-native
-// quote, but the rest line up).
+// Config selects the PancakeSwap V3 subgraph endpoint. The official Graph
+// Network endpoint requires an API key. A custom endpoint (for example, a
+// private indexer) may omit APIKey.
+type Config struct {
+	SubgraphURL string `json:"subgraph_url,omitempty"`
+	APIKey      string `json:"api_key,omitempty"`
+}
+
+// TokenInfo contains the PancakeSwap V3 token metadata used by the SDK. The
+// subgraph schema keeps the historical
+// derivedETH JSON field name on BNB Chain; DerivedBNB maps that field to its
+// actual chain-native meaning.
 type TokenInfo struct {
 	ID                  string  `json:"id"`
 	Symbol              string  `json:"symbol"`
 	Decimals            string  `json:"decimals"`
-	DerivedBNB          string  `json:"derivedBNB"`          // string-encoded decimal
+	DerivedBNB          string  `json:"derivedETH"`          // BNB price; schema retains the derivedETH name
+	DerivedUSD          string  `json:"derivedUSD"`          // string-encoded decimal
 	TotalValueLockedUSD string  `json:"totalValueLockedUSD"` // string-encoded decimal
-	VolumeUSD           string  `json:"volumeUSD"`
+	VolumeUSD           string  `json:"volumeUSD"`           // cumulative, not 24-hour volume
 	WhitelistPools      []*Pool `json:"whitelistPools,omitempty"`
 }
 
@@ -30,8 +39,9 @@ type Pool struct {
 }
 
 type graphResp[T any] struct {
-	Data   T            `json:"data"`
-	Errors []graphError `json:"errors,omitempty"`
+	Data    T            `json:"data"`
+	Errors  []graphError `json:"errors,omitempty"`
+	Message string       `json:"message,omitempty"`
 }
 
 type graphError struct {

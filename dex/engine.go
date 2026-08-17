@@ -71,26 +71,32 @@ type Request struct {
 }
 
 type Route struct {
-	Rank            int       `json:"rank"`
-	Recommended     bool      `json:"recommended"`
-	CrossChain      bool      `json:"crossChain"`
-	FromChain       string    `json:"fromChain"`
-	FromToken       string    `json:"fromToken"`
-	ToChain         string    `json:"toChain"`
-	ToToken         string    `json:"toToken"`
-	ToDecimals      int       `json:"toDecimals"`
-	SourceIssuer    string    `json:"sourceIssuer,omitempty"`
-	ToAmount        string    `json:"toAmount"`
-	ToAmountUsd     float64   `json:"toAmountUsd"`
-	ExpectedFillUsd float64   `json:"expectedFillUsd,omitempty"`
-	Channel         string    `json:"channel"`
-	FeeUsd          float64   `json:"feeUsd,omitempty"`
-	PriceImpactPct  float64   `json:"priceImpactPct,omitempty"`
-	LiquidityUsd    float64   `json:"liquidityUsd,omitempty"`
-	EstSeconds      int64     `json:"estSeconds,omitempty"`
-	RouteTags       []string  `json:"routeTags,omitempty"`
-	Warnings        []Warning `json:"warnings,omitempty"`
-	Reason          string    `json:"reason,omitempty"`
+	Rank            int                   `json:"rank"`
+	Recommended     bool                  `json:"recommended"`
+	CrossChain      bool                  `json:"crossChain"`
+	FromChain       string                `json:"fromChain"`
+	FromToken       string                `json:"fromToken"`
+	ToChain         string                `json:"toChain"`
+	ToToken         string                `json:"toToken"`
+	ToDecimals      int                   `json:"toDecimals"`
+	SourceIssuer    string                `json:"sourceIssuer,omitempty"`
+	ToAmount        string                `json:"toAmount"`
+	ToAmountUsd     float64               `json:"toAmountUsd"`
+	ExpectedFillUsd float64               `json:"expectedFillUsd,omitempty"`
+	Channel         string                `json:"channel"`
+	RouteId         string                `json:"routeId,omitempty"`
+	AmountOutMin    string                `json:"amountOutMin,omitempty"`
+	NeedBuild       bool                  `json:"needBuild"`
+	TxData          *dexmodel.DexTx       `json:"txData,omitempty"`
+	ApprovalData    *dexmodel.DexApproval `json:"approvalData,omitempty"`
+	TrustedSpenders []string              `json:"trustedSpenders,omitempty"`
+	FeeUsd          float64               `json:"feeUsd,omitempty"`
+	PriceImpactPct  float64               `json:"priceImpactPct,omitempty"`
+	LiquidityUsd    float64               `json:"liquidityUsd,omitempty"`
+	EstSeconds      int64                 `json:"estSeconds,omitempty"`
+	RouteTags       []string              `json:"routeTags,omitempty"`
+	Warnings        []Warning             `json:"warnings,omitempty"`
+	Reason          string                `json:"reason,omitempty"`
 }
 
 type Warning = dexmodel.DexWarning
@@ -262,6 +268,12 @@ func (e *Engine) Quote(ctx context.Context, req *Request, cands []*Candidate, qu
 			ToAmountUsd:     toAmtUsdGross,
 			ExpectedFillUsd: expectedFillUsd,
 			Channel:         channel,
+			RouteId:         best.RouteId,
+			AmountOutMin:    best.AmountOutMin,
+			NeedBuild:       best.NeedBuild,
+			TxData:          best.TxData,
+			ApprovalData:    best.ApprovalData,
+			TrustedSpenders: append([]string(nil), best.TrustedSpenders...),
 			FeeUsd:          feeUsd,
 			PriceImpactPct:  best.PriceImpactPct,
 			LiquidityUsd:    r.cand.LiquidityUsd,

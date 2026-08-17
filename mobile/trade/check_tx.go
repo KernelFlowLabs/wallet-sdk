@@ -82,6 +82,16 @@ func CheckTx(reqJSON string) string {
 		out, err = autoQuoteBungee().Status(ctx, in)
 	case "lifi":
 		out, err = autoQuoteLiFi().Status(ctx, in)
+	case "univ2":
+		chain := req.FromChain
+		if chain == "" {
+			chain = req.ToChain
+		}
+		client := autoQuoteUniv2(chain)
+		if client == nil {
+			return marshal(&checkTxResp{Error: fmt.Sprintf("univ2 is not configured for chain %q", chain)})
+		}
+		out, err = client.Status(ctx, in)
 	default:
 		return marshal(&checkTxResp{Error: fmt.Sprintf("unknown channel: %q", req.Channel)})
 	}

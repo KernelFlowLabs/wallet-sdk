@@ -185,6 +185,12 @@ func dispatch(ctx context.Context, cand *dex.Candidate, in *dexmodel.DexQuoteIn)
 		return autoQuoteBungee().Quote(ctx, in)
 	case "lifi":
 		return autoQuoteLiFi().Quote(ctx, in)
+	case "univ2":
+		client := autoQuoteUniv2(cand.FromChain)
+		if client == nil {
+			return nil, fmt.Errorf("univ2 is not configured for chain %q", cand.FromChain)
+		}
+		return client.Quote(ctx, in)
 	}
 	return nil, fmt.Errorf("unknown channel: %q", cand.Channel)
 }
