@@ -186,10 +186,18 @@ func dispatch(ctx context.Context, cand *dex.Candidate, in *dexmodel.DexQuoteIn)
 	case "lifi":
 		return autoQuoteLiFi().Quote(ctx, in)
 	case "univ2":
-		client := autoQuoteUniv2(cand.FromChain)
+		client, release := acquireUniv2Client(cand.FromChain)
 		if client == nil {
-			return nil, fmt.Errorf("univ2 is not configured for chain %q", cand.FromChain)
+			return nil, &dex.ChannelConfigurationError{Channel: "univ2", Chain: cand.FromChain}
 		}
+		defer release()
+		return client.Quote(ctx, in)
+	case "univ3":
+		client, release := acquireUniv3Client(cand.FromChain)
+		if client == nil {
+			return nil, &dex.ChannelConfigurationError{Channel: "univ3", Chain: cand.FromChain}
+		}
+		defer release()
 		return client.Quote(ctx, in)
 	}
 	return nil, fmt.Errorf("unknown channel: %q", cand.Channel)

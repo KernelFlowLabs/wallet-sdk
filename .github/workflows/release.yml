@@ -61,14 +61,14 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
         run: |
-          sh mobile/buildmobile.sh all "evm sol"
+          bash mobile/buildmobile.sh all "evm sol"
           mv dist/wallet_mobile.aar dist/wallet_mobile_evm_sol.aar
           mv dist/WalletMobile.xcframework dist/WalletMobile_evm_sol.xcframework
 
       - name: Build full (all chains) bindings
         env:
           ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
-        run: sh mobile/buildmobile.sh all ""
+        run: bash mobile/buildmobile.sh all ""
 
       - name: Package + checksum
         run: |

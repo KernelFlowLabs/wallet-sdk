@@ -6,22 +6,22 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kernelflowlabs/wallet-sdk/dex/univ2"
+	"github.com/kernelflowlabs/wallet-sdk/dex/univ3"
 )
 
-var univ2Clients map[string]*univ2.Client
+var univ3Clients map[string]*univ3.Client
 
-func newUniv2Clients(configs []univ2.Config, existing map[string]*univ2.Client) (map[string]*univ2.Client, []*univ2.Client, error) {
-	clients := make(map[string]*univ2.Client, len(configs)*2)
-	created := make([]*univ2.Client, 0, len(configs))
+func newUniv3Clients(configs []univ3.Config, existing map[string]*univ3.Client) (map[string]*univ3.Client, []*univ3.Client, error) {
+	clients := make(map[string]*univ3.Client, len(configs)*2)
+	created := make([]*univ3.Client, 0, len(configs))
 	closeCreated := func() {
-		closeUniv2ClientList(created)
+		closeUniv3ClientList(created)
 	}
 	for i, config := range configs {
-		candidate, err := univ2.NewClient(config)
+		candidate, err := univ3.NewClient(config)
 		if err != nil {
 			closeCreated()
-			return nil, nil, fmt.Errorf("univ2[%d]: %w", i, err)
+			return nil, nil, fmt.Errorf("univ3[%d]: %w", i, err)
 		}
 		normalized := candidate.Config()
 		nameKey := strings.ToUpper(normalized.ChainName)
@@ -29,15 +29,15 @@ func newUniv2Clients(configs []univ2.Config, existing map[string]*univ2.Client) 
 		if _, exists := clients[nameKey]; exists {
 			candidate.Close()
 			closeCreated()
-			return nil, nil, fmt.Errorf("duplicate univ2 chain %q", normalized.ChainName)
+			return nil, nil, fmt.Errorf("duplicate univ3 chain %q", normalized.ChainName)
 		}
 		if _, exists := clients[idKey]; exists {
 			candidate.Close()
 			closeCreated()
-			return nil, nil, fmt.Errorf("duplicate univ2 chainId %d", normalized.ChainID)
+			return nil, nil, fmt.Errorf("duplicate univ3 chainId %d", normalized.ChainID)
 		}
 		client := candidate
-		if current := existing[nameKey]; current != nil && sameUniv2Config(current.Config(), normalized) {
+		if current := existing[nameKey]; current != nil && sameUniv3Config(current.Config(), normalized) {
 			candidate.Close()
 			client = current
 		} else {
@@ -49,18 +49,20 @@ func newUniv2Clients(configs []univ2.Config, existing map[string]*univ2.Client) 
 	return clients, created, nil
 }
 
-func sameUniv2Config(left, right univ2.Config) bool {
+func sameUniv3Config(left, right univ3.Config) bool {
 	return left.ChainName == right.ChainName &&
 		left.ChainID == right.ChainID &&
 		left.RPC == right.RPC &&
 		left.Factory == right.Factory &&
-		left.Router02 == right.Router02 &&
+		left.SwapRouter == right.SwapRouter &&
+		left.Quoter == right.Quoter &&
 		left.WrappedNative == right.WrappedNative &&
 		left.DeadlineTTL == right.DeadlineTTL &&
+		slices.Equal(left.FeeTiers, right.FeeTiers) &&
 		slices.Equal(left.QuoteBaseTokens, right.QuoteBaseTokens)
 }
 
-func closeUniv2ClientList(clients []*univ2.Client) {
+func closeUniv3ClientList(clients []*univ3.Client) {
 	for _, client := range clients {
 		if client == nil {
 			continue
@@ -69,12 +71,12 @@ func closeUniv2ClientList(clients []*univ2.Client) {
 	}
 }
 
-func closeRetiredUniv2Clients(previous, current map[string]*univ2.Client) {
-	kept := make(map[*univ2.Client]struct{}, len(current))
+func closeRetiredUniv3Clients(previous, current map[string]*univ3.Client) {
+	kept := make(map[*univ3.Client]struct{}, len(current))
 	for _, client := range current {
 		kept[client] = struct{}{}
 	}
-	retired := make(map[*univ2.Client]struct{}, len(previous))
+	retired := make(map[*univ3.Client]struct{}, len(previous))
 	for _, client := range previous {
 		if client == nil {
 			continue
@@ -90,9 +92,9 @@ func closeRetiredUniv2Clients(previous, current map[string]*univ2.Client) {
 	}
 }
 
-func acquireUniv2Client(chain string) (*univ2.Client, func()) {
+func acquireUniv3Client(chain string) (*univ3.Client, func()) {
 	tradeMu.RLock()
-	client := univ2Clients[strings.ToUpper(strings.TrimSpace(chain))]
+	client := univ3Clients[strings.ToUpper(strings.TrimSpace(chain))]
 	if client == nil {
 		tradeMu.RUnlock()
 		return nil, nil

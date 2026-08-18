@@ -87,10 +87,22 @@ func CheckTx(reqJSON string) string {
 		if chain == "" {
 			chain = req.ToChain
 		}
-		client := autoQuoteUniv2(chain)
+		client, release := acquireUniv2Client(chain)
 		if client == nil {
 			return marshal(&checkTxResp{Error: fmt.Sprintf("univ2 is not configured for chain %q", chain)})
 		}
+		defer release()
+		out, err = client.Status(ctx, in)
+	case "univ3":
+		chain := req.FromChain
+		if chain == "" {
+			chain = req.ToChain
+		}
+		client, release := acquireUniv3Client(chain)
+		if client == nil {
+			return marshal(&checkTxResp{Error: fmt.Sprintf("univ3 is not configured for chain %q", chain)})
+		}
+		defer release()
 		out, err = client.Status(ctx, in)
 	default:
 		return marshal(&checkTxResp{Error: fmt.Sprintf("unknown channel: %q", req.Channel)})

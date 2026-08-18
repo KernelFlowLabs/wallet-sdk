@@ -20,7 +20,7 @@ const (
 
 var (
 	ErrInvalidRouterVersion = errors.New("univ3: router version must be 1 or 2")
-	ErrNoSwapFound          = errors.New("univ3: no exactInputSingle found")
+	ErrNoSwapFound          = errors.New("univ3: no exact-input swap found")
 	ErrUnsupportedSelector  = errors.New("univ3: unsupported selector")
 
 	parsedV1                 abi.ABI
@@ -44,8 +44,6 @@ func init() {
 	}
 }
 
-// IsUniV3Router recognizes the two canonical legacy V3 router deployments.
-// It does not recognize Universal Router addresses.
 func IsUniV3Router(addr string) (int, bool) {
 	addr = strings.TrimSpace(addr)
 	if len(addr) != 42 || !common.IsHexAddress(addr) {
@@ -61,10 +59,6 @@ func IsUniV3Router(addr string) (int, bool) {
 	}
 }
 
-// DecodeSwapInfo decodes exactly one exactInputSingle call. It rejects a
-// multicall containing multiple swaps so callers cannot accidentally inspect
-// only part of a transaction. Use DecodeSwapInfos when multiple swaps are
-// expected.
 func DecodeSwapInfo(calldata []byte, routerVer int) (*SwapInfo, error) {
 	infos, err := DecodeSwapInfos(calldata, routerVer)
 	if err != nil {
@@ -76,9 +70,6 @@ func DecodeSwapInfo(calldata []byte, routerVer int) (*SwapInfo, error) {
 	return infos[0], nil
 }
 
-// DecodeSwapInfos decodes exactInputSingle calls directly or recursively from
-// all three legacy multicall overloads. routerVer is inferred for direct swap
-// calls and must be 1 or 2 for multicalls.
 func DecodeSwapInfos(calldata []byte, routerVer int) ([]*SwapInfo, error) {
 	return decodeSwapInfos(calldata, routerVer, 0)
 }
@@ -95,6 +86,12 @@ func decodeSwapInfos(calldata []byte, routerVer, depth int) ([]*SwapInfo, error)
 	switch selector {
 	case SelectorExactInputSingleV1:
 		info, err := decodeV1(calldata)
+		if err != nil {
+			return nil, err
+		}
+		return []*SwapInfo{info}, nil
+	case SelectorExactInputV1:
+		info, err := decodeExactInputV1(calldata)
 		if err != nil {
 			return nil, err
 		}
@@ -163,7 +160,7 @@ func hasSupportedSelector(calldata []byte) bool {
 		return false
 	}
 	switch hex.EncodeToString(calldata[:4]) {
-	case SelectorExactInputSingleV1, SelectorExactInputSingleV2,
+	case SelectorExactInputSingleV1, SelectorExactInputV1, SelectorExactInputSingleV2,
 		SelectorMulticall, SelectorMulticallDeadline, SelectorMulticallBlockhash:
 		return true
 	default:
@@ -220,9 +217,6 @@ func decodeMulticallEnvelope(calldata []byte, selector string) ([][]byte, *big.I
 	return calls, nil, &hash, nil
 }
 
-// EncodeExactInputSingle creates deadline-protected calldata. SwapRouter V1
-// carries the deadline in its tuple; SwapRouter02 is wrapped in
-// multicall(uint256,bytes[]). A nil deadline defaults to now plus 60 seconds.
 func EncodeExactInputSingle(info *SwapInfo, recipient common.Address, deadline *big.Int, routerVer int) ([]byte, error) {
 	if err := validateRouterVersion(routerVer); err != nil {
 		return nil, err
@@ -244,9 +238,6 @@ func EncodeExactInputSingle(info *SwapInfo, recipient common.Address, deadline *
 	return parsedV2.Pack("multicall", deadline, [][]byte{inner})
 }
 
-// EncodeExactInputSingleCall returns the raw router method call. For
-// SwapRouter02 the deadline cannot be represented in the inner tuple and is
-// intentionally absent; prefer EncodeExactInputSingle for transaction data.
 func EncodeExactInputSingleCall(info *SwapInfo, recipient common.Address, deadline *big.Int, routerVer int) ([]byte, error) {
 	if err := validateRouterVersion(routerVer); err != nil {
 		return nil, err
@@ -293,8 +284,8 @@ func validateSwapInfo(info *SwapInfo, recipient common.Address, routerVer int) e
 	if info.AmountIn == nil || info.AmountIn.Sign() <= 0 || info.AmountIn.BitLen() > 256 {
 		return fmt.Errorf("univ3: amountIn must be a positive uint256")
 	}
-	if info.AmountOutMinimum == nil || info.AmountOutMinimum.Sign() < 0 || info.AmountOutMinimum.BitLen() > 256 {
-		return fmt.Errorf("univ3: amountOutMinimum must be a uint256")
+	if info.AmountOutMinimum == nil || info.AmountOutMinimum.Sign() <= 0 || info.AmountOutMinimum.BitLen() > 256 {
+		return fmt.Errorf("univ3: amountOutMinimum must be a positive uint256")
 	}
 	if info.SqrtPriceLimitX96 == nil || info.SqrtPriceLimitX96.Sign() < 0 || info.SqrtPriceLimitX96.BitLen() > 160 {
 		return fmt.Errorf("univ3: sqrtPriceLimitX96 must be a uint160")
@@ -346,7 +337,83 @@ func decodeV2(calldata []byte) (*SwapInfo, error) {
 	return info, nil
 }
 
-// extractSwapFields reads the ABI-unpacked anonymous tuple struct.
+func decodeExactInputV1(calldata []byte) (*SwapInfo, error) {
+	method := parsedV1.Methods["exactInput"]
+	values, err := method.Inputs.Unpack(calldata[4:])
+	if err != nil {
+		return nil, fmt.Errorf("univ3: unpack v1 exactInput: %w", err)
+	}
+	if len(values) != 1 {
+		return nil, fmt.Errorf("univ3: unexpected v1 exactInput argument count %d", len(values))
+	}
+	rv := reflect.ValueOf(values[0])
+	if rv.Kind() == reflect.Ptr {
+		rv = rv.Elem()
+	}
+	if rv.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("univ3: expected exactInput tuple struct, got %T", values[0])
+	}
+	field := func(name string) (reflect.Value, error) {
+		value := rv.FieldByName(name)
+		if !value.IsValid() {
+			return reflect.Value{}, fmt.Errorf("univ3: exactInput field %s not found", name)
+		}
+		return value, nil
+	}
+	pathField, err := field("Path")
+	if err != nil {
+		return nil, err
+	}
+	path, ok := pathField.Interface().([]byte)
+	if !ok {
+		return nil, fmt.Errorf("univ3: exactInput Path has type %T", pathField.Interface())
+	}
+	tokens, fees, err := decodeV3Path(path)
+	if err != nil {
+		return nil, err
+	}
+	recipientField, err := field("Recipient")
+	if err != nil {
+		return nil, err
+	}
+	recipient, ok := recipientField.Interface().(common.Address)
+	if !ok || recipient == (common.Address{}) {
+		return nil, fmt.Errorf("univ3: exactInput has invalid recipient")
+	}
+	bigField := func(name string) (*big.Int, error) {
+		value, err := field(name)
+		if err != nil {
+			return nil, err
+		}
+		number, ok := value.Interface().(*big.Int)
+		if !ok || number == nil {
+			return nil, fmt.Errorf("univ3: exactInput field %s has type %T", name, value.Interface())
+		}
+		return new(big.Int).Set(number), nil
+	}
+	deadline, err := bigField("Deadline")
+	if err != nil {
+		return nil, err
+	}
+	amountIn, err := bigField("AmountIn")
+	if err != nil {
+		return nil, err
+	}
+	amountOutMinimum, err := bigField("AmountOutMinimum")
+	if err != nil {
+		return nil, err
+	}
+	if deadline.Sign() <= 0 || deadline.BitLen() > 256 || amountIn.Sign() <= 0 || amountIn.BitLen() > 256 || amountOutMinimum.Sign() <= 0 || amountOutMinimum.BitLen() > 256 {
+		return nil, fmt.Errorf("univ3: exactInput contains invalid numeric fields")
+	}
+	return &SwapInfo{
+		TokenIn: tokens[0], TokenOut: tokens[len(tokens)-1], Recipient: recipient,
+		Deadline: deadline, AmountIn: amountIn, AmountOutMinimum: amountOutMinimum,
+		SqrtPriceLimitX96: new(big.Int), RouterVersion: RouterVersionV1,
+		Path: append([]byte(nil), path...), Tokens: tokens, Fees: fees,
+	}, nil
+}
+
 func extractSwapFields(value any, hasDeadline bool) (*SwapInfo, error) {
 	rv := reflect.ValueOf(value)
 	if rv.Kind() == reflect.Ptr {
@@ -430,6 +497,8 @@ func extractSwapFields(value any, hasDeadline bool) (*SwapInfo, error) {
 		AmountIn:          amountIn,
 		AmountOutMinimum:  amountOutMinimum,
 		SqrtPriceLimitX96: sqrtPriceLimitX96,
+		Tokens:            []common.Address{tokenIn, tokenOut},
+		Fees:              []uint32{fee},
 	}
 	if hasDeadline {
 		info.Deadline, err = bigIntField("Deadline")

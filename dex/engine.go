@@ -95,6 +95,7 @@ type Route struct {
 	LiquidityUsd    float64               `json:"liquidityUsd,omitempty"`
 	EstSeconds      int64                 `json:"estSeconds,omitempty"`
 	RouteTags       []string              `json:"routeTags,omitempty"`
+	ExpiresAt       int64                 `json:"expiresAt,omitempty"`
 	Warnings        []Warning             `json:"warnings,omitempty"`
 	Reason          string                `json:"reason,omitempty"`
 }
@@ -106,7 +107,20 @@ const (
 	FailureTimeout     = "TIMEOUT"
 	FailureProvider    = "PROVIDER_ERROR"
 	FailureNoRoute     = "NO_ROUTE"
+	FailureConfig      = "CONFIGURATION_ERROR"
 )
+
+type ChannelConfigurationError struct {
+	Channel string
+	Chain   string
+}
+
+func (e *ChannelConfigurationError) Error() string {
+	if e == nil {
+		return "quote channel is not configured"
+	}
+	return fmt.Sprintf("%s is not configured for chain %q", e.Channel, e.Chain)
+}
 
 // CandidateFailure records why one requested target has no route. It
 // intentionally excludes the provider/channel name so SDK consumers do not
@@ -218,6 +232,7 @@ func (e *Engine) Quote(ctx context.Context, req *Request, cands []*Candidate, qu
 
 	out := make([]*Route, 0, len(results))
 	providerErrors := 0
+	configurationErrors := 0
 	emptyResponses := 0
 	timedOut := false
 	rateLimited := false
@@ -225,6 +240,9 @@ func (e *Engine) Quote(ctx context.Context, req *Request, cands []*Candidate, qu
 		if r.err != nil {
 			providerErrors++
 			code, retryAfter := classifyQuoteFailure(r.err)
+			if code == FailureConfig {
+				configurationErrors++
+			}
 			timedOut = timedOut || code == FailureTimeout
 			rateLimited = rateLimited || code == FailureRateLimited
 			resp.Failures = append(resp.Failures, candidateFailure(r.cand, code, retryAfter))
@@ -279,6 +297,7 @@ func (e *Engine) Quote(ctx context.Context, req *Request, cands []*Candidate, qu
 			LiquidityUsd:    r.cand.LiquidityUsd,
 			EstSeconds:      best.EstimatedTime,
 			RouteTags:       append([]string(nil), best.RouteTags...),
+			ExpiresAt:       best.ExpiresAt,
 			Warnings:        append([]Warning(nil), best.Warnings...),
 			Reason:          ReasonFor(r.cand, channel),
 		}
@@ -317,6 +336,9 @@ func (e *Engine) Quote(ctx context.Context, req *Request, cands []*Candidate, qu
 	resp.Routes = out
 	if len(out) == 0 {
 		switch {
+		case configurationErrors > 0:
+			resp.Reason = "QUOTE_CONFIGURATION_ERROR"
+			resp.ReasonMessage = "one or more requested quote channels are not configured for the selected chain"
 		case errors.Is(qctx.Err(), context.DeadlineExceeded) || timedOut:
 			resp.Reason = "QUOTE_TIMEOUT"
 			resp.ReasonMessage = "quote request timed out — try again"
@@ -354,6 +376,10 @@ func candidateFailure(c *Candidate, code string, retryAfterSeconds int) *Candida
 func classifyQuoteFailure(err error) (code string, retryAfterSeconds int) {
 	if err == nil {
 		return FailureProvider, 0
+	}
+	var configErr *ChannelConfigurationError
+	if errors.As(err, &configErr) {
+		return FailureConfig, 0
 	}
 	var statusErr *httpc.HTTPStatusError
 	if errors.As(err, &statusErr) && statusErr.StatusCode == 429 {

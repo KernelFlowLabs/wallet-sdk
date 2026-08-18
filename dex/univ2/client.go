@@ -80,31 +80,32 @@ func NewClient(config Config) (*Client, error) {
 }
 
 func normalizeConfig(config Config) (Config, common.Address, common.Address, common.Address, []common.Address, error) {
+	zero := common.Address{}
 	config.ChainName = strings.TrimSpace(config.ChainName)
 	config.RPC = strings.TrimSpace(config.RPC)
 	if config.ChainName == "" {
-		return Config{}, common.Address{}, common.Address{}, common.Address{}, nil, fmt.Errorf("univ2: chainName is required")
+		return Config{}, zero, zero, zero, nil, fmt.Errorf("univ2: chainName is required")
 	}
 	if config.ChainID == 0 {
-		return Config{}, common.Address{}, common.Address{}, common.Address{}, nil, fmt.Errorf("univ2: chainId must be greater than zero")
+		return Config{}, zero, zero, zero, nil, fmt.Errorf("univ2: chainId must be greater than zero")
 	}
 	if err := validateRPCURL(config.RPC); err != nil {
-		return Config{}, common.Address{}, common.Address{}, common.Address{}, nil, err
+		return Config{}, zero, zero, zero, nil, err
 	}
 	factory, err := requiredAddress("factory", config.Factory)
 	if err != nil {
-		return Config{}, common.Address{}, common.Address{}, common.Address{}, nil, err
+		return Config{}, zero, zero, zero, nil, err
 	}
 	router, err := requiredAddress("router02", config.Router02)
 	if err != nil {
-		return Config{}, common.Address{}, common.Address{}, common.Address{}, nil, err
+		return Config{}, zero, zero, zero, nil, err
 	}
 	wrapped, err := requiredAddress("wrappedNative", config.WrappedNative)
 	if err != nil {
-		return Config{}, common.Address{}, common.Address{}, common.Address{}, nil, err
+		return Config{}, zero, zero, zero, nil, err
 	}
 	if factory == router {
-		return Config{}, common.Address{}, common.Address{}, common.Address{}, nil, fmt.Errorf("univ2: factory and router02 must differ")
+		return Config{}, zero, zero, zero, nil, fmt.Errorf("univ2: factory and router02 must differ")
 	}
 
 	seen := make(map[common.Address]struct{}, len(config.QuoteBaseTokens)+1)
@@ -113,7 +114,7 @@ func normalizeConfig(config Config) (Config, common.Address, common.Address, com
 	for i, raw := range config.QuoteBaseTokens {
 		base, err := requiredAddress(fmt.Sprintf("quoteBaseTokens[%d]", i), raw)
 		if err != nil {
-			return Config{}, common.Address{}, common.Address{}, common.Address{}, nil, err
+			return Config{}, zero, zero, zero, nil, err
 		}
 		if _, ok := seen[base]; ok {
 			continue
@@ -129,6 +130,12 @@ func normalizeConfig(config Config) (Config, common.Address, common.Address, com
 	config.Router02 = router.Hex()
 	config.WrappedNative = wrapped.Hex()
 	config.QuoteBaseTokens = normalizedBases
+	if config.DeadlineTTL == 0 {
+		config.DeadlineTTL = DefaultDeadlineTTL
+	}
+	if config.DeadlineTTL < time.Second {
+		return Config{}, zero, zero, zero, nil, fmt.Errorf("univ2: deadlineTTL must be at least one second")
+	}
 	return config, factory, router, wrapped, bases, nil
 }
 
@@ -226,7 +233,7 @@ func (c *Client) Quote(ctx context.Context, in *dexmodel.DexQuoteIn) (*dexmodel.
 	}
 
 	amountOutMin := applySlippage(bestAmount, slippage)
-	deadline := big.NewInt(c.now().Add(DefaultDeadlineTTL).Unix())
+	deadline := big.NewInt(c.now().Add(c.config.DeadlineTTL).Unix())
 	calldata, method, err := encodeSwap(amountIn, amountOutMin, bestPath, recipient, deadline, inputNative, outputNative)
 	if err != nil {
 		return nil, err

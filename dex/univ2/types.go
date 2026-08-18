@@ -12,13 +12,14 @@ const (
 // Config describes one Uniswap V2-compatible deployment. Token amounts are
 // always raw base-unit integers; the client never rescales by token decimals.
 type Config struct {
-	ChainName       string   `json:"chain_name"`
-	ChainID         uint64   `json:"chain_id"`
-	RPC             string   `json:"rpc"`
-	Factory         string   `json:"factory"`
-	Router02        string   `json:"router02"`
-	WrappedNative   string   `json:"wrapped_native"`
-	QuoteBaseTokens []string `json:"quote_base_tokens,omitempty"`
+	ChainName       string        `json:"chain_name"`
+	ChainID         uint64        `json:"chain_id"`
+	RPC             string        `json:"rpc"`
+	Factory         string        `json:"factory"`
+	Router02        string        `json:"router02"`
+	WrappedNative   string        `json:"wrapped_native"`
+	QuoteBaseTokens []string      `json:"quote_base_tokens,omitempty"`
+	DeadlineTTL     time.Duration `json:"deadline_ttl,omitempty"`
 }
 
 const factoryABIJSON = `[
