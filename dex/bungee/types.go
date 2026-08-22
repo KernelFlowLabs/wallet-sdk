@@ -432,6 +432,7 @@ var idChainMapper = map[string]string{
 	"60808":      "BOB",
 	"33139":      "APECHAIN",
 	"2741":       "ABSTRACT",
+	"4663":       "ROBINHOOD",
 	"130":        "UNICHAIN",
 	"57073":      "INK",
 }
