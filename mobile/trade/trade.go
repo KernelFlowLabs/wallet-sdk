@@ -96,5 +96,5 @@ func jupClient() *jupiter.Client {
 }
 
 func Version() string {
-	return "wallet-sdk/mobile/trade 1.0.0 (dynamic univ2/univ3 + EIP-2612 permit + lifecycle-safe reconfiguration)"
+	return "wallet-sdk/mobile/trade 1.0.1 (dynamic univ2/univ3 + EIP-2612 permit + lifecycle-safe reconfiguration)"
 }

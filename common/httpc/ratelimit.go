@@ -9,7 +9,7 @@ type RateLimitError struct {
 }
 
 func (e *RateLimitError) Error() string {
-	return fmt.Sprintf("rate limit exceeded for %s request to %s: %v", e.Method, e.URL, e.Err)
+	return fmt.Sprintf("rate limit exceeded for %s request to %s: %v", e.Method, safeURL(e.URL), e.Err)
 }
 
 func (e *RateLimitError) Unwrap() error {
